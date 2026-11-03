@@ -58,7 +58,7 @@ flowchart LR
 ```
 infra/terraform/governance/   tenant scope: groups · domains · domain roles · tags
 infra/terraform/domains/      workspaces · lakehouses · shortcuts · OneLake roles
-tools/                        REST tools for what the provider cannot manage (labels, endorsement, tags on items)
+tools/                        Purview labels (PowerShell), tenant settings, OneLake reader: what the provider cannot manage
 docs/                         plan, screenshots
 .github/workflows/            ci (fmt · validate · tflint)
 ```

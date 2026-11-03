@@ -13,11 +13,6 @@ variable "capacity_id" {
   type        = string
 }
 
-variable "admin_user_object_id" {
-  description = "Entra object ID of the user granted the Admin role."
-  type        = string
-}
-
 variable "group_ids" {
   description = "Entra group object IDs of the domain."
   type = object({

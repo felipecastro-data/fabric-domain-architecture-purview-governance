@@ -29,7 +29,9 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
   applied 2026-11-03: 9 groups, 3 domains, domain admins/contributors, 4 tags
   - [ ] Domain default labels: re-apply once the label tenant settings are on
   - [ ] Domain contributors scope is still *entire tenant* (provider has no `contributors_scope`): restrict to the engineers group via Admin API
-- [ ] **4. Domains stack**: HCP workspace `fabric-mesh-domains`, apply workspaces + lakehouses + domain assignment + shortcuts
+- [x] **4. Domains stack**: HCP workspace `fabric-mesh-domains`; applied 2026-11-03: 3 workspaces + lakehouses, group roles,
+  domain assignment (provider preview), 12 shortcuts (7 to the medallion platform, 5 cross-domain).
+  Verified: 6,006,901 trips readable in `lh_analytics` through two shortcut hops, zero copies; re-plan shows no drift
 - [ ] **5. Access control**: OneLake data access roles (consumers read specific tables; ride-level data restricted)
 - [ ] **6. Purview governance**
   - [ ] Sensitivity labels published; domain default labels; `tools/apply_labels.py`

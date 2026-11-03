@@ -41,7 +41,6 @@ module "data_product" {
   display_name          = "${var.project_name}-${each.key}"
   description           = "${local.domains[each.key].display_name} domain workspace (${local.domains[each.key].kind}) — managed by Terraform"
   capacity_id           = var.capacity_id
-  admin_user_object_id  = var.admin_user_object_id
   lakehouse_name        = each.value.lakehouse
   lakehouse_description = each.value.description
 
@@ -76,10 +75,34 @@ locals {
       }
     }
   ]...)
+
+  source_shortcuts       = { for k, s in local.shortcuts : k => s if startswith(s.from, "source:") }
+  cross_domain_shortcuts = { for k, s in local.shortcuts : k => s if !startswith(s.from, "source:") }
 }
 
-resource "fabric_shortcut" "this" {
-  for_each = local.shortcuts
+# Producer domains: shortcuts into the upstream medallion platform
+resource "fabric_shortcut" "source" {
+  for_each = local.source_shortcuts
+
+  workspace_id = module.data_product[each.value.product].workspace_id
+  item_id      = module.data_product[each.value.product].lakehouse_id
+  path         = "Tables/dbo"
+  name         = each.value.name
+
+  target = {
+    onelake = {
+      workspace_id = local.shortcut_sources[each.value.from].workspace_id
+      item_id      = local.shortcut_sources[each.value.from].item_id
+      path         = "Tables/dbo/${each.value.table}"
+    }
+  }
+}
+
+# Consumer domains: shortcuts to producer data products (which are shortcuts themselves), so they must exist first
+resource "fabric_shortcut" "cross_domain" {
+  for_each = local.cross_domain_shortcuts
+
+  depends_on = [fabric_shortcut.source]
 
   workspace_id = module.data_product[each.value.product].workspace_id
   item_id      = module.data_product[each.value.product].lakehouse_id

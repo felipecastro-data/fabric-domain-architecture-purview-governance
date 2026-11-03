@@ -9,11 +9,6 @@ variable "capacity_id" {
   type        = string
 }
 
-variable "admin_user_object_id" {
-  description = "Entra object ID of the human administrator granted Admin on every workspace."
-  type        = string
-}
-
 variable "source_workspace_name" {
   description = "Upstream workspace whose Delta tables the producer domains expose (the medallion platform's prod workspace)."
   type        = string

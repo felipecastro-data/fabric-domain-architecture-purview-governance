@@ -21,4 +21,6 @@ terraform {
 # Authentication is supplied through environment variables, never in code:
 #   CI    -> FABRIC_USE_OIDC=true, FABRIC_CLIENT_ID, FABRIC_TENANT_ID (GitHub OIDC, no secrets)
 #   local -> Azure CLI user context (`az login`)
-provider "fabric" {}
+provider "fabric" {
+  preview = true # fabric_domain_workspace_assignments is a preview resource in provider 1.14
+}
