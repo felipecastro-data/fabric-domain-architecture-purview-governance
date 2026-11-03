@@ -21,10 +21,6 @@ permissions:
   contents: read
   pull-requests: write
 
-concurrency:
-  group: terraform-mesh
-  cancel-in-progress: false
-
 env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
@@ -48,6 +44,9 @@ jobs:
     name: plan · ${{ matrix.stack }}
     # Fork PRs get neither the HCP token nor an OIDC token
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    concurrency: # one plan per PR and stack; a new push supersedes the running plan
+      group: terraform-plan-${{ github.event.pull_request.number }}-${{ matrix.stack }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -91,7 +90,7 @@ jobs:
             ${plan}
             \`\`\`
             </details>`;
-            const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: context.issue.number, per_page: 100 });
             const existing = comments.find(c => c.body.includes(marker));
             if (existing) {
               await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
@@ -104,6 +103,9 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: platform # requires manual approval
+    concurrency: # deployments never share a group with PR plans, so a plan cannot cancel a pending apply
+      group: terraform-apply
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4

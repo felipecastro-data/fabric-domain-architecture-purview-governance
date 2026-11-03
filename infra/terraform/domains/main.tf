@@ -53,13 +53,12 @@ module "data_product" {
   source   = "./modules/data_product_workspace"
   for_each = var.data_products
 
-  display_name            = "${var.project_name}-${each.key}"
-  description             = "${local.domains[each.key].display_name} domain workspace (${local.domains[each.key].kind}) — managed by Terraform"
-  capacity_id             = var.capacity_id
-  lakehouse_name          = each.value.lakehouse
-  lakehouse_description   = each.value.description
-  lakehouse_tag_ids       = [for t in each.value.tags : local.tags[t]]
-  ci_service_principal_id = local.ci_sp
+  display_name          = "${var.project_name}-${each.key}"
+  description           = "${local.domains[each.key].display_name} domain workspace (${local.domains[each.key].kind}) — managed by Terraform"
+  capacity_id           = var.capacity_id
+  lakehouse_name        = each.value.lakehouse
+  lakehouse_description = each.value.description
+  lakehouse_tag_ids     = [for t in each.value.tags : local.tags[t]]
 
   group_ids = {
     owners    = local.groups["${each.key}-owners"]

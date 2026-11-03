@@ -37,6 +37,16 @@ resource "azuread_group" "this" {
   }
 }
 
+# The CI service principal is a member of every owners group, so it is workspace Admin through the group. That
+# keeps its access to workspaces a person created, and never collides with the Admin role Fabric grants the creator
+# of a workspace (a direct assignment would fail with PrincipalAlreadyHasWorkspaceRolePermissions).
+resource "azuread_group_member" "ci_owners" {
+  for_each = { for k, g in local.groups : k => g if g.role == "owners" }
+
+  group_object_id  = azuread_group.this[each.key].object_id
+  member_object_id = var.ci_service_principal_object_id
+}
+
 resource "fabric_domain" "this" {
   for_each = var.domains
 
