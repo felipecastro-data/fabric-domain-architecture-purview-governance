@@ -145,8 +145,10 @@ flowchart LR
 - **No secrets**: the CI service principal signs in with GitHub OIDC federated credentials. The HCP Terraform token
   is the only repository secret.
 - **A dedicated CI identity**: one service principal for this repo. It gets Fabric admin APIs through a single
-  automation group and is Admin of only the mesh workspaces. It is Member of the source workspace, which OneLake
-  security management requires. Graph access covers the mesh groups.
+  automation group and is Admin of only the mesh workspaces, through their owners groups. It is Member of the source
+  workspace, which OneLake security management requires. Its Graph permissions (`Group.ReadWrite.All`,
+  `Directory.Read.All`) are tenant-wide, because Graph has no per-group application scope; Terraform only manages the
+  9 mesh groups.
 - **`main` is protected**: changes land through PRs only, `ci` and `compliance` are required, and review threads must be resolved.
 - **Compliance** fails the build when any of these drifts from Terraform: a workspace's domain, a tenant setting, a
   domain's contributor scope, a OneLake role, a label, a tag set or an endorsement.
