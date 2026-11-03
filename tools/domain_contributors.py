@@ -1,6 +1,6 @@
 """Domain contributors scope as code: only the groups assigned by Terraform may add workspaces to a domain.
 
-python tools/domain_contributors.py           # dry run: show domains whose contributors scope differs
+python tools/domain_contributors.py           # dry run: show domains whose contributors scope differs; exits 1 on drift
 python tools/domain_contributors.py --apply   # restrict them
 
 New domains default to contributorsScope "AllTenant" (an EntireTenant contributor next to the engineers group that
@@ -60,7 +60,7 @@ def main(apply: bool) -> None:
     if not changes:
         print("Domain contributors scopes match.")
     elif not apply:
-        print(f"\n{len(changes)} domain(s) differ. Re-run with --apply to update them.")
+        raise SystemExit(f"\n{len(changes)} domain(s) differ. Re-run with --apply to update them.")
     else:
         for key, domain_id in changes:
             req("PATCH", f"{API}/{domain_id}?preview=true", {"contributorsScope": DESIRED_SCOPE})

@@ -46,7 +46,8 @@ env:
 jobs:
   plan:
     name: plan · ${{ matrix.stack }}
-    if: github.event_name == 'pull_request'
+    # Fork PRs get neither the HCP token nor an OIDC token
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -133,3 +134,5 @@ jobs:
         run: python tools/onelake_roles.py --apply
       - name: tools · labels, tags, endorsement
         run: python tools/data_product_governance.py --apply
+      - name: check · workspace domains
+        run: python tools/workspace_domains.py

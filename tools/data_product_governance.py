@@ -1,7 +1,7 @@
 """Data product governance as code: sensitivity label, tags and endorsement on each data product lakehouse,
 as rendered by the domains stack (output `data_product_governance`).
 
-python tools/data_product_governance.py           # dry run: show what differs from Terraform
+python tools/data_product_governance.py           # dry run: show what differs from Terraform; exits 1 on drift
 python tools/data_product_governance.py --apply   # set labels and tags; report endorsement still to do
 
 * Labels: Admin API bulkSetLabels (Fabric administrator *user* only, 25 calls/hour). Fabric also labels the
@@ -114,6 +114,8 @@ def main(apply: bool) -> None:
     elif relabel or retag:
         print(f"\n{sum(map(len, relabel.values()))} label(s) and {len(retag)} tag set(s) differ. Re-run with --apply.")
 
+    if not apply and (relabel or retag):
+        raise SystemExit("Labels or tags differ" + (" (and endorsement: " + "; ".join(endorse) + ")" if endorse else "") + ".")
     if apply and relabel and in_github_actions():
         raise SystemExit("Labels differ and bulkSetLabels does not support service principals: run locally with --apply.")
     if endorse:

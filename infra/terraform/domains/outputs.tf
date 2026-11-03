@@ -1,11 +1,17 @@
 output "workspaces" {
-  description = "Domain key => { workspace_id, lakehouse_id }."
+  description = "Domain key => { workspace_id, lakehouse_id, domain_id }. tools/workspace_domains.py checks the domain assignments."
   value = {
     for k, m in module.data_product : k => {
       workspace_id = m.workspace_id
       lakehouse_id = m.lakehouse_id
+      domain_id    = local.domains[k].id
     }
   }
+}
+
+output "workspace_prefix" {
+  description = "Name prefix of every data product workspace."
+  value       = "${var.project_name}-"
 }
 
 output "shortcuts" {

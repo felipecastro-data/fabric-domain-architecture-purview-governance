@@ -1,6 +1,6 @@
 """OneLake security roles as code: applies the roles rendered by the domains stack (output `onelake_access_roles`).
 
-python tools/onelake_roles.py           # dry run: show which roles differ from Terraform
+python tools/onelake_roles.py           # dry run: show which roles differ from Terraform; exits 1 on drift
 python tools/onelake_roles.py --apply   # create or update the ones that differ
 
 Each role is upserted on its own (POST .../dataAccessRoles), never the replace-all PUT, so roles this repo doesn't
@@ -92,7 +92,7 @@ def main(apply: bool) -> None:
     if not changes:
         print("OneLake roles match Terraform.")
     elif not apply:
-        print(f"\n{len(changes)} role(s) differ. Re-run with --apply to update them.")
+        raise SystemExit(f"\n{len(changes)} role(s) differ. Re-run with --apply to update them.")
     else:
         for key, r in changes.items():
             req("POST", f"{API}/workspaces/{r['workspace_id']}/items/{r['item_id']}/dataAccessRoles", r["role"])
