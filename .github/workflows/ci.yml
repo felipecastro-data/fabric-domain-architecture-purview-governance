@@ -1,7 +1,7 @@
 name: ci
 
 # Static checks that need no cloud access: fmt, validate and tflint for every Terraform stack.
-# plan / apply (OIDC + HCP Terraform) are added in terraform.yml once the service principal is set up.
+# plan / apply (OIDC + HCP Terraform) live in terraform.yml.
 on:
   pull_request:
   push:

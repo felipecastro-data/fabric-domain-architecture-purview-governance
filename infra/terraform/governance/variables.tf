@@ -44,6 +44,11 @@ variable "admin_user_object_id" {
   type        = string
 }
 
+variable "ci_service_principal_object_id" {
+  description = "Entra object ID of the CI service principal (GitHub OIDC). Owner of every group and Admin of every mesh workspace, so local and CI runs plan the same."
+  type        = string
+}
+
 variable "sensitivity_label_ids" {
   description = "Purview label display name => label ID. Written by tools/purview/labels.ps1 (labels.auto.tfvars.json, gitignored); empty until labels are published."
   type        = map(string)

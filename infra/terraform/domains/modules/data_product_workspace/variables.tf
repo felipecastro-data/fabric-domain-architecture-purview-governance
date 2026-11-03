@@ -22,6 +22,11 @@ variable "group_ids" {
   })
 }
 
+variable "ci_service_principal_id" {
+  description = "Entra object ID of the CI service principal, made workspace Admin."
+  type        = string
+}
+
 variable "lakehouse_name" {
   description = "Name of the data product lakehouse."
   type        = string
