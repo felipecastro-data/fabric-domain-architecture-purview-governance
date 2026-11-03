@@ -14,7 +14,7 @@ output "shortcuts" {
 }
 
 output "data_product_governance" {
-  description = "Domain key => lakehouse with its sensitivity label, tags and endorsement — applied by tools/data_product_governance.py."
+  description = "Domain key => lakehouse with its sensitivity label, tags (applied by Terraform) and endorsement — checked by tools/data_product_governance.py."
   value = {
     for k, p in var.data_products : k => {
       workspace_id = module.data_product[k].workspace_id

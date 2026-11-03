@@ -28,7 +28,7 @@ resource "azuread_group" "this" {
   display_name     = "${var.group_prefix}-${each.key}"
   description      = each.value.description
   security_enabled = true
-  owners           = distinct([data.azuread_client_config.current.object_id, var.admin_user_object_id])
+  owners           = distinct([data.azuread_client_config.current.object_id, var.admin_user_object_id, var.ci_service_principal_object_id])
   members          = each.value.role == "owners" ? [var.admin_user_object_id] : []
 
   # Membership of engineers / consumers groups is managed outside Terraform (access reviews, requests).

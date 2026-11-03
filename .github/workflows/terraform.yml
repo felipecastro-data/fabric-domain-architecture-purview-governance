@@ -1,0 +1,135 @@
+name: terraform
+
+# PR   -> plan both stacks (one PR comment per stack); fmt / validate / tflint run in ci.yml
+# main -> apply governance, then domains, then the governance tools, gated by the `platform` environment
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - "tools/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/terraform/**"
+      - "tools/**"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write # GitHub OIDC -> Entra service principal (no stored cloud secrets)
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-mesh
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+  # Fabric and azuread providers, and tools/fabric_auth.py
+  FABRIC_USE_OIDC: "true"
+  FABRIC_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  FABRIC_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  TF_VAR_admin_user_object_id: ${{ vars.FABRIC_ADMIN_USER_OBJECT_ID }}
+  TF_VAR_ci_service_principal_object_id: ${{ vars.FABRIC_SP_OBJECT_ID }}
+  TF_VAR_sensitivity_label_ids: ${{ vars.SENSITIVITY_LABEL_IDS }}
+  TF_VAR_capacity_id: ${{ vars.FABRIC_CAPACITY_ID }}
+
+jobs:
+  plan:
+    name: plan · ${{ matrix.stack }}
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [governance, domains] # domains plans against the applied governance state
+    defaults:
+      run:
+        working-directory: infra/terraform/${{ matrix.stack }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - run: terraform init
+      - name: terraform plan
+        id: plan
+        run: |
+          set -o pipefail
+          terraform plan -no-color -lock-timeout=5m | tee plan.txt
+      - name: Comment plan on PR
+        if: always() && steps.plan.outcome != 'skipped'
+        uses: actions/github-script@v9
+        env:
+          PLAN_OUTCOME: ${{ steps.plan.outcome }}
+          STACK: ${{ matrix.stack }}
+        with:
+          script: |
+            const fs = require('fs');
+            const stack = process.env.STACK;
+            let plan = fs.readFileSync(`infra/terraform/${stack}/plan.txt`, 'utf8');
+            const summary = (plan.match(/^(Plan:.*|No changes\..*)$/m) || ['(see log)'])[0];
+            if (plan.length > 60000) plan = '...(truncated)...\n' + plan.slice(-60000);
+            const marker = `<!-- terraform-plan-${stack} -->`;
+            const body = `${marker}
+            ### Terraform plan · \`${stack}\` — \`${process.env.PLAN_OUTCOME}\`
+            **${summary}**
+            <details><summary>Show plan</summary>
+
+            \`\`\`terraform
+            ${plan}
+            \`\`\`
+            </details>`;
+            const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
+
+  apply:
+    name: apply
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: platform # requires manual approval
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: apply · governance
+        working-directory: infra/terraform/governance
+        run: |
+          terraform init
+          terraform plan -no-color -lock-timeout=5m -out=tfplan
+          terraform apply -no-color -lock-timeout=5m tfplan
+      - name: apply · domains
+        working-directory: infra/terraform/domains
+        run: |
+          terraform init
+          terraform plan -no-color -lock-timeout=5m -out=tfplan
+          terraform apply -no-color -lock-timeout=5m tfplan
+      # Settings the provider cannot manage. Labels and endorsement are checked only (no service principal API).
+      - name: tools · tenant settings
+        run: python tools/tenant_settings.py --apply
+      - name: tools · domain contributors
+        run: python tools/domain_contributors.py --apply
+      - name: tools · OneLake roles
+        run: python tools/onelake_roles.py --apply
+      - name: tools · labels, tags, endorsement
+        run: python tools/data_product_governance.py --apply

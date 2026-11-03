@@ -29,3 +29,8 @@ output "tenant_id" {
   description = "Entra tenant ID, used for OneLake security role members."
   value       = data.azuread_client_config.current.tenant_id
 }
+
+output "ci_service_principal_object_id" {
+  description = "Entra object ID of the CI service principal. The domains stack makes it workspace Admin."
+  value       = var.ci_service_principal_object_id
+}
