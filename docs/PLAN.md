@@ -52,4 +52,4 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
   - [x] `compliance.yml`: read-only drift check on PRs (deployed policy), after each apply and daily
         (workspace domains, tenant settings, contributors, OneLake roles, labels / tags / endorsement)
   - [x] `main` protected: PRs only, `ci` + `compliance` required
-- [ ] **8. Showcase**: README with diagrams, governance matrix, screenshots, impact
+- [x] **8. Showcase**: README with diagrams, governance matrix, screenshots, impact
