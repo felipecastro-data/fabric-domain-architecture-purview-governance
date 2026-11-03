@@ -1,0 +1,40 @@
+name: ci
+
+# Static checks that need no cloud access: fmt, validate and tflint for every Terraform stack.
+# plan / apply (OIDC + HCP Terraform) are added in terraform.yml once the service principal is set up.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: terraform · ${{ matrix.stack }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [governance, domains]
+    defaults:
+      run:
+        working-directory: infra/terraform/${{ matrix.stack }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+      - uses: terraform-linters/setup-tflint@v6
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff
+      - name: terraform init
+        run: terraform init -backend=false
+      - name: terraform validate
+        run: terraform validate
+      - name: tflint
+        run: |
+          tflint --init
+          tflint --recursive --format compact
