@@ -18,3 +18,8 @@ output "tags" {
   description = "Tag display name => tag ID."
   value       = { for k, t in fabric_tag.this : k => t.id }
 }
+
+output "tenant_id" {
+  description = "Entra tenant ID, used for OneLake security role members."
+  value       = data.azuread_client_config.current.tenant_id
+}

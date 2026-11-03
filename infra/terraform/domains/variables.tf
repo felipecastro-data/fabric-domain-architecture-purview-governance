@@ -62,3 +62,33 @@ variable "data_products" {
     }
   }
 }
+
+variable "access_roles" {
+  description = <<-EOT
+    OneLake security roles ("<lakehouse>.<RoleName>" => role). `lakehouse` is a domain key or "source:<lakehouse>"
+    for the upstream workspace. `tables` are table names under Tables/dbo ("*" = everything); `groups` are governance
+    group keys. Shortcuts are passthrough: a reader needs a role at every hop, and access is the intersection.
+    Fabric rejects roles on shortcut paths, and every mesh table is a shortcut, so mesh lakehouses grant "*" and
+    table-level restrictions live on the source lakehouses, where the data is.
+  EOT
+  type = map(object({
+    tables = list(string)
+    groups = list(string)
+  }))
+  default = {
+    # Cross-domain readers pass through the producer lakehouses; the source roles decide which tables they see
+    "mobility.CrossDomainRead" = { tables = ["*"], groups = ["analytics-consumers", "analytics-engineers"] }
+    "weather.CrossDomainRead"  = { tables = ["*"], groups = ["analytics-consumers", "analytics-engineers"] }
+
+    # Upstream medallion workspace: ride-level fact_trips (Confidential) is for engineers only
+    "source:lh_gold.MeshAggregates" = { tables = ["dim_station", "dim_date", "agg_daily_kpis", "agg_station_monthly"], groups = ["mobility-consumers", "analytics-consumers"] }
+    "source:lh_gold.MeshRideLevel"  = { tables = ["fact_trips", "dim_station", "dim_date", "agg_daily_kpis", "agg_station_monthly"], groups = ["mobility-engineers", "analytics-engineers"] }
+    "source:lh_gold.MeshWeather"    = { tables = ["dim_weather"], groups = ["weather-consumers", "weather-engineers", "analytics-consumers", "analytics-engineers"] }
+    "source:lh_silver.MeshWeather"  = { tables = ["weather_daily"], groups = ["weather-consumers", "weather-engineers"] }
+  }
+
+  validation {
+    condition     = alltrue([for k, r in var.access_roles : startswith(k, "source:") || r.tables == tolist(["*"])])
+    error_message = "Mesh lakehouses hold only shortcuts, and Fabric rejects roles on shortcut paths: use tables = [\"*\"] and restrict tables on the source lakehouse."
+  }
+}
