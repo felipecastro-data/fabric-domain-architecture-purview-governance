@@ -1,6 +1,6 @@
 """Fabric tenant settings as code (Admin API), for the settings the Terraform provider does not manage.
 
-python tools/tenant_settings.py           # dry run: show which settings differ from DESIRED
+python tools/tenant_settings.py           # dry run: show which settings differ from DESIRED; exits 1 on drift
 python tools/tenant_settings.py --apply   # update the ones that differ
 
 Requires the Fabric administrator role (user locally, service principal with write admin APIs in CI).
@@ -56,7 +56,7 @@ def main(apply: bool) -> None:
     if not changes:
         print("Tenant settings match DESIRED.")
     elif not apply:
-        print(f"\n{len(changes)} setting(s) differ. Re-run with --apply to update them.")
+        raise SystemExit(f"\n{len(changes)} setting(s) differ. Re-run with --apply to update them.")
     else:
         failed = []
         for name, enabled in changes.items():

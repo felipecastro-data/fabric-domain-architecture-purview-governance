@@ -45,5 +45,11 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
   - [x] Lineage across domains in the Fabric lineage view (divvy-prod `lh_gold` → `lh_mobility` → `lh_analytics`); the Purview hub is now OneLake catalog → Govern
   - [x] Screenshots in `docs/screenshots/` (lineage, endorsed data products, domains governance, OneLake security roles)
   - [ ] Optional: OneLake catalog tenant insights screenshot once its daily refresh picks up the domains
-- [ ] **7. CI/CD**: OIDC service principal, `terraform.yml` (plan comment on PR, approval-gated apply), governance compliance check
+- [x] **7. CI/CD**: OIDC service principal, `terraform.yml` (plan comment on PR, approval-gated apply), governance compliance check
+  - [x] Service principal `sp-fabric-mesh-governance` (GitHub OIDC; member of `sg-fabric-automation`; Graph
+        `Group.ReadWrite.All` + `Directory.Read.All`; workspace Admin / source Member through Terraform)
+  - [x] `terraform.yml`: plan comment per stack on PRs; governance → domains → tools apply behind `platform`
+  - [x] `compliance.yml`: read-only drift check on PRs, `main` and daily (workspace domains, tenant settings,
+        contributors, OneLake roles, labels / tags / endorsement)
+  - [x] `main` protected: PRs only, `ci` + `compliance` required
 - [ ] **8. Showcase**: README with diagrams, governance matrix, screenshots, impact

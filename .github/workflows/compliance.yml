@@ -1,0 +1,55 @@
+name: compliance
+
+# Live governance state vs Terraform, read-only. Fails when any check finds drift:
+# workspace domains, tenant settings, domain contributors, OneLake roles, labels / tags / endorsement.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *" # daily: catches portal changes made outside Terraform
+  workflow_dispatch:
+
+permissions:
+  id-token: write # GitHub OIDC -> Entra service principal
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }} # tools read `terraform output` from HCP state
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+
+jobs:
+  compliance:
+    name: compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: terraform init
+        run: |
+          terraform -chdir=infra/terraform/governance init
+          terraform -chdir=infra/terraform/domains init
+      # if: !cancelled() runs every check, so one failure does not hide another
+      - name: workspace domains
+        if: ${{ !cancelled() }}
+        run: python tools/workspace_domains.py
+      - name: tenant settings
+        if: ${{ !cancelled() }}
+        run: python tools/tenant_settings.py
+      - name: domain contributors
+        if: ${{ !cancelled() }}
+        run: python tools/domain_contributors.py
+      - name: OneLake roles
+        if: ${{ !cancelled() }}
+        run: python tools/onelake_roles.py
+      - name: labels, tags, endorsement
+        if: ${{ !cancelled() }}
+        run: python tools/data_product_governance.py
