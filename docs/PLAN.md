@@ -19,15 +19,15 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
 
 - [x] **0. Plan**: scope, risks, provider coverage checked
 - [x] **1. Scaffold**: repo layout, both Terraform stacks, `ci` (fmt · validate · tflint)
-- [ ] **2. Prerequisites**
+- [x] **2. Prerequisites**
   - [x] E5 Information Protection & Governance trial started (2026-11-03, 1 month), license assigned to the Fabric user
   - [x] Sensitivity labels + policy created as code: `tools/purview/labels.ps1`
   - [x] Tenant settings as code: `tools/tenant_settings.py` (domains, certification, master data applied)
-  - [ ] Label tenant settings: blocked until the published labels reach Fabric (up to 24 h), then re-run `--apply`
+  - [x] Label tenant settings: applied 2026-11-03 once the published labels reached Fabric (first attempt: 400 `UnknownError`)
   - [x] Fabric user can create Entra security groups (Global Administrator)
 - [x] **3. Governance stack**: HCP workspace `fabric-mesh-governance` (local execution, state shared with `fabric-mesh-domains`);
   applied 2026-11-03: 9 groups, 3 domains, domain admins/contributors, 4 tags
-  - [ ] Domain default labels: re-apply once the label tenant settings are on
+  - [x] Domain default labels applied 2026-11-03: Mobility/Analytics = Confidential, Weather = Public
   - [ ] Domain contributors scope is still *entire tenant* (provider has no `contributors_scope`): restrict to the engineers group via Admin API
 - [x] **4. Domains stack**: HCP workspace `fabric-mesh-domains`; applied 2026-11-03: 3 workspaces + lakehouses, group roles,
   domain assignment (provider preview), 12 shortcuts (7 to the medallion platform, 5 cross-domain).
