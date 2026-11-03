@@ -91,7 +91,7 @@ restricted to the domain's engineers group (`SpecificUsersAndGroups`, not the de
 | Group (per domain) | Domain role | Workspace role | Data access |
 |---|---|---|---|
 | `sg-mesh-<domain>-owners` | Admin | Admin | Everything in the domain's workspace |
-| `sg-mesh-<domain>-engineers` | Contributor | Contributor | Everything in the domain's workspace; ride-level data across domains |
+| `sg-mesh-<domain>-engineers` | Contributor | Contributor | Everything in the domain's workspace; Mobility and Analytics engineers also read ride-level data upstream |
 | `sg-mesh-<domain>-consumers` | — | Viewer | Only the tables a OneLake security role grants |
 
 OneLake shortcuts are **passthrough**: a reader needs a role **at every hop**, and effective access is the
@@ -129,7 +129,8 @@ Analytics lakehouse over OneLake. Each read went through `lh_analytics` → prod
 | `dim_weather` | 2 hops | ✅ 365 rows |
 | `fact_trips` | 2 hops | ⛔ denied ("lacked the necessary privileges") |
 
-Through the same two hops, an engineer or owner reads all 6,006,901 rows of `fact_trips`.
+Analytics engineers hold a role at every hop and read all 6,006,901 rows of `fact_trips`. Membership of an owners
+group alone does not: workspace Admin applies only in the domain's own workspace, not at upstream hops.
 [`tools/read_onelake.py`](tools/read_onelake.py) reproduces the test.
 
 ## Delivery
@@ -163,8 +164,10 @@ flowchart LR
 | Purview labels and label policy | [`purview/labels.ps1`](tools/purview/labels.ps1) | Security & Compliance PowerShell |
 | **Endorsement** | **Portal** (no write API exists) | Set once in item settings. Terraform declares it, and the compliance check fails while it differs. |
 
-Every tool is idempotent. It runs as a dry run by default, `--apply` makes the changes, and it reads its desired
-state from `terraform output`, so there is one source of truth.
+The Python tools are idempotent. Each runs as a dry run by default, exits 1 on drift, and makes changes only with
+`--apply`. All of them except `tenant_settings.py` read their desired state from `terraform output`, so there is one
+source of truth; `tenant_settings.py` keeps its own `DESIRED` map. `labels.ps1` is idempotent too, but it has no dry
+run: it creates or updates the labels and publishes the label policy as soon as it runs.
 
 ## What the gates caught
 
@@ -242,15 +245,25 @@ You need a Fabric capacity (a trial works), Microsoft Purview Information Protec
 Terraform organization, and the medallion platform from the
 [sibling repo](https://github.com/felipecastro-data/fabric-medallion-cicd-terraform) as the data source.
 
-1. Create the labels and label policy: `pwsh tools/purview/labels.ps1 -UserPrincipalName <admin upn>`. It writes the
-   label IDs to `labels.auto.tfvars.json`.
-2. Enable the tenant settings: `python tools/tenant_settings.py --apply`.
-3. Apply `infra/terraform/governance`, then `infra/terraform/domains`.
-4. Apply the rest: `onelake_roles.py --apply`, `domain_contributors.py --apply` and
+1. Point Terraform at your HCP organization. Replace `felipecastro-data` in both stacks' `versions.tf` `cloud`
+   blocks and in the `terraform_remote_state` block of `infra/terraform/domains/main.tf`. Then create the workspaces
+   `fabric-mesh-governance` and `fabric-mesh-domains`, both with execution mode **Local**.
+2. Create the CI identity: an Entra app and service principal with GitHub OIDC federated credentials (pull requests,
+   `main` and the `platform` environment). Its object ID is a Terraform input from the first apply on.
+3. Create the labels and label policy: `pwsh tools/purview/labels.ps1 -UserPrincipalName <admin upn>`. This applies
+   them immediately and writes the label IDs to `labels.auto.tfvars.json`.
+4. Enable the tenant settings: `python tools/tenant_settings.py --apply`.
+5. Write each stack's `local.auto.tfvars` (it is gitignored):
+   - `governance`: `admin_user_object_id` and `ci_service_principal_object_id`;
+   - `domains`: `capacity_id`.
+6. Apply `infra/terraform/governance`, then `infra/terraform/domains`.
+7. Apply the rest: `onelake_roles.py --apply`, `domain_contributors.py --apply` and
    `data_product_governance.py --apply`. Set endorsement in the portal.
-5. For CI: create an Entra app with GitHub OIDC federated credentials. Set the repository variables
-   (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `FABRIC_CAPACITY_ID`, `FABRIC_ADMIN_USER_OBJECT_ID`, `FABRIC_SP_OBJECT_ID`,
-   `SENSITIVITY_LABEL_IDS`) and the `TF_API_TOKEN` secret, and create the `platform` environment.
+8. For CI:
+   - set the repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `FABRIC_CAPACITY_ID`,
+     `FABRIC_ADMIN_USER_OBJECT_ID`, `FABRIC_SP_OBJECT_ID` and `SENSITIVITY_LABEL_IDS`, and the `TF_API_TOKEN` secret;
+   - create the `platform` environment and add **required reviewers** to it. Without that protection rule, applies
+     run without waiting for approval.
 
 Progress and decisions are in [docs/PLAN.md](docs/PLAN.md). Working conventions are in [CLAUDE.md](CLAUDE.md).
 
