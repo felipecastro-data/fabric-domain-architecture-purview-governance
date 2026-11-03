@@ -150,6 +150,12 @@ flowchart LR
 - **`main` is protected**: changes land through PRs only, `ci` and `compliance` are required, and review threads must be resolved.
 - **Compliance** fails the build when any of these drifts from Terraform: a workspace's domain, a tenant setting, a
   domain's contributor scope, a OneLake role, a label, a tag set or an endorsement.
+- **Accepted trade-off: PR plans use the deployment identity.** Providers and data sources can run code during
+  `terraform plan`, so a pull request from someone with write access could act with the CI service principal before
+  the `platform` approval. Fork PRs never get the credentials: their plan and compliance jobs are skipped. With a
+  single maintainer, one identity is a deliberate simplification. The fix for a larger team is a separate read-only
+  service principal for plans, with Viewer workspace roles and read-only admin APIs, keeping the write identity
+  behind the protected environment.
 
 ## What is code, and what isn't
 
