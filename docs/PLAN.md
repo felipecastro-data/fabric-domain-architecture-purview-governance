@@ -35,7 +35,8 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
 - [ ] **5. Access control**: OneLake security roles (consumers read dimensions/aggregates; ride-level `fact_trips` is engineers only)
   - [x] Role map in Terraform (`var.access_roles` → output `onelake_access_roles`), applied by `tools/onelake_roles.py` (2026-11-03: 6 roles)
   - [x] Table-level roles on the source lakehouses (`lh_gold`, `lh_silver`); mesh lakehouses grant `*` (Fabric rejects roles on shortcut paths)
-  - [ ] Live read test as a member of `sg-mesh-analytics-consumers` (aggregates readable, `fact_trips` denied)
+  - [x] Live read test as `mesh-consumer-test` (member of `sg-mesh-analytics-consumers`, no Fabric license) through
+    `lh_analytics` → producer → `lh_gold`: agg_daily_kpis 732, dim_station 2,028, dim_weather 365 rows; `fact_trips` denied
   - [ ] Move back to `fabric_onelake_data_access_security` when microsoft/terraform-provider-fabric#1044 ships
 - [ ] **6. Purview governance**
   - [ ] Sensitivity labels published; domain default labels; `tools/apply_labels.py`

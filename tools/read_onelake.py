@@ -4,11 +4,13 @@
         python tools/read_onelake.py <workspace-id> <lakehouse> <table> ["<python statement over dt>"]
 
 Without a statement it prints the last 10 rows; e.g. ``"print(dt.to_pandas().groupby('_period').size())"``.
+<lakehouse> is a name or an ID; pass the ID for users without a Fabric license (the lookup API needs one, OneLake doesn't).
 """
 
 from __future__ import annotations
 
 import json
+import re
 import sys
 import urllib.request
 
@@ -16,16 +18,22 @@ from deltalake import DeltaTable
 from fabric_auth import access_token  # fresh GitHub OIDC exchange in CI, az CLI locally
 
 STORAGE_SCOPE = "https://storage.azure.com/.default"
+GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 
 
-def open_table(ws: str, lakehouse: str, table: str) -> DeltaTable:
+def lakehouse_id(ws: str, lakehouse: str) -> str:
+    if GUID.match(lakehouse):
+        return lakehouse
     request = urllib.request.Request(
         f"https://api.fabric.microsoft.com/v1/workspaces/{ws}/lakehouses",
         headers={"Authorization": f"Bearer {access_token()}"},
     )
     with urllib.request.urlopen(request) as response:
-        lakehouse_id = next(x["id"] for x in json.load(response)["value"] if x["displayName"] == lakehouse)
-    uri = f"abfss://{ws}@onelake.dfs.fabric.microsoft.com/{lakehouse_id}/Tables/dbo/{table}"
+        return next(x["id"] for x in json.load(response)["value"] if x["displayName"] == lakehouse)
+
+
+def open_table(ws: str, lakehouse: str, table: str) -> DeltaTable:
+    uri = f"abfss://{ws}@onelake.dfs.fabric.microsoft.com/{lakehouse_id(ws, lakehouse)}/Tables/dbo/{table}"
     storage = {"bearer_token": access_token(STORAGE_SCOPE), "use_fabric_endpoint": "true"}
     return DeltaTable(uri, storage_options=storage)
 
