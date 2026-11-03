@@ -19,11 +19,15 @@ variable "data_products" {
   description = <<-EOT
     One data product lakehouse per domain (key = domain key from the governance stack).
     Each shortcut maps a table name to its source: `from` is "source:<lakehouse>" for the upstream medallion workspace,
-    or another domain key for a cross-domain shortcut.
+    or another domain key for a cross-domain shortcut. `label` (default: the domain's default label), `tags` and
+    `endorsement` (Promoted | Certified) are applied to the lakehouse by tools/data_product_governance.py.
   EOT
   type = map(object({
     lakehouse   = string
     description = string
+    label       = optional(string)
+    tags        = list(string)
+    endorsement = string
     shortcuts = map(object({
       from  = string
       table = string
@@ -33,6 +37,8 @@ variable "data_products" {
     mobility = {
       lakehouse   = "lh_mobility"
       description = "Mobility data product: Divvy trips star schema and KPIs"
+      tags        = ["Data Product", "Source Aligned", "Contains Ride Data"]
+      endorsement = "Certified"
       shortcuts = {
         fact_trips          = { from = "source:lh_gold", table = "fact_trips" }
         dim_station         = { from = "source:lh_gold", table = "dim_station" }
@@ -44,6 +50,8 @@ variable "data_products" {
     weather = {
       lakehouse   = "lh_weather"
       description = "Weather data product: daily Chicago weather"
+      tags        = ["Data Product", "Source Aligned"]
+      endorsement = "Certified"
       shortcuts = {
         dim_weather   = { from = "source:lh_gold", table = "dim_weather" }
         weather_daily = { from = "source:lh_silver", table = "weather_daily" }
@@ -52,6 +60,8 @@ variable "data_products" {
     analytics = {
       lakehouse   = "lh_analytics"
       description = "Analytics consumer lakehouse: cross-domain shortcuts to Mobility and Weather data products"
+      tags        = ["Consumer Aligned", "Contains Ride Data"]
+      endorsement = "Promoted"
       shortcuts = {
         fact_trips     = { from = "mobility", table = "fact_trips" }
         dim_station    = { from = "mobility", table = "dim_station" }
@@ -60,6 +70,11 @@ variable "data_products" {
         dim_weather    = { from = "weather", table = "dim_weather" }
       }
     }
+  }
+
+  validation {
+    condition     = alltrue([for p in values(var.data_products) : contains(["Promoted", "Certified"], p.endorsement)])
+    error_message = "endorsement must be Promoted or Certified."
   }
 }
 

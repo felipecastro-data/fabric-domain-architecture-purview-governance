@@ -15,6 +15,7 @@ data "terraform_remote_state" "governance" {
 locals {
   domains = data.terraform_remote_state.governance.outputs.domains
   groups  = data.terraform_remote_state.governance.outputs.groups
+  labels  = data.terraform_remote_state.governance.outputs.labels
 
   source_lakehouses = toset(distinct([
     for s in flatten([for p in values(var.data_products) : values(p.shortcuts)]) :

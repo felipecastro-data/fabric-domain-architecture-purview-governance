@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -26,12 +27,18 @@ DOMAINS_STACK = Path(__file__).resolve().parents[1] / "infra" / "terraform" / "d
 def req(method: str, url: str, body: dict | None = None) -> dict | None:
     data = json.dumps(body).encode() if body is not None else None
     headers = {"Authorization": f"Bearer {access_token()}", "Content-Type": "application/json"}
-    try:
-        with urllib.request.urlopen(urllib.request.Request(url, data=data, method=method, headers=headers), timeout=60) as r:  # noqa: S310
-            raw = r.read()
-            return json.loads(raw) if raw else None
-    except urllib.error.HTTPError as exc:
-        raise SystemExit(f"{method} {url} -> {exc.code} {exc.read().decode()}") from exc
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, data=data, method=method, headers=headers), timeout=60) as r:  # noqa: S310
+                raw = r.read()
+                return json.loads(raw) if raw else None
+        except urllib.error.HTTPError as exc:
+            raise SystemExit(f"{method} {url} -> {exc.code} {exc.read().decode()}") from exc
+        except urllib.error.URLError:  # transient connection failures; HTTP errors are never retried
+            if attempt == 2:
+                raise
+            time.sleep(5)
+    return None
 
 
 def desired_roles() -> dict[str, dict]:

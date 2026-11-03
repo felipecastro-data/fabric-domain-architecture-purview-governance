@@ -1,12 +1,18 @@
 output "domains" {
-  description = "Domain key => { id, display_name, kind }. Consumed by the domains stack."
+  description = "Domain key => { id, display_name, kind, default_label }. Consumed by the domains stack."
   value = {
     for k, d in fabric_domain.this : k => {
-      id           = d.id
-      display_name = d.display_name
-      kind         = var.domains[k].kind
+      id            = d.id
+      display_name  = d.display_name
+      kind          = var.domains[k].kind
+      default_label = var.domains[k].default_label
     }
   }
+}
+
+output "labels" {
+  description = "Purview sensitivity label display name => label ID."
+  value       = var.sensitivity_label_ids
 }
 
 output "groups" {

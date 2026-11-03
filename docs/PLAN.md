@@ -28,7 +28,7 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
 - [x] **3. Governance stack**: HCP workspace `fabric-mesh-governance` (local execution, state shared with `fabric-mesh-domains`);
   applied 2026-11-03: 9 groups, 3 domains, domain admins/contributors, 4 tags
   - [x] Domain default labels applied 2026-11-03: Mobility/Analytics = Confidential, Weather = Public
-  - [ ] Domain contributors scope is still *entire tenant* (provider has no `contributors_scope`): restrict to the engineers group via Admin API
+  - [x] Domain contributors restricted to the engineers group (`tools/domain_contributors.py`, preview Admin API; provider has no `contributors_scope`)
 - [x] **4. Domains stack**: HCP workspace `fabric-mesh-domains`; applied 2026-11-03: 3 workspaces + lakehouses, group roles,
   domain assignment (provider preview), 12 shortcuts (7 to the medallion platform, 5 cross-domain).
   Verified: 6,006,901 trips readable in `lh_analytics` through two shortcut hops, zero copies; re-plan shows no drift
@@ -39,9 +39,9 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
     `lh_analytics` → producer → `lh_gold`: agg_daily_kpis 732, dim_station 2,028, dim_weather 365 rows; `fact_trips` denied
   - [ ] Move back to `fabric_onelake_data_access_security` when microsoft/terraform-provider-fabric#1044 ships
 - [ ] **6. Purview governance**
-  - [ ] Sensitivity labels published; domain default labels; `tools/apply_labels.py`
-  - [ ] Endorsement (promoted / certified): API or documented manual step
-  - [ ] Tags applied to data product items
+  - [x] Sensitivity labels on the data product lakehouses (and their SQL endpoints): `tools/data_product_governance.py` (`bulkSetLabels`)
+  - [ ] Endorsement: no write API in Fabric, so a documented portal step (Mobility/Weather Certified, Analytics Promoted), verified by `tools/data_product_governance.py`
+  - [x] Tags applied to the data product lakehouses (`applyTags`/`unapplyTags`), desired state in `var.data_products`
   - [ ] Lineage across domains in the Fabric lineage view + Purview hub / Unified Catalog
 - [ ] **7. CI/CD**: OIDC service principal, `terraform.yml` (plan comment on PR, approval-gated apply), governance compliance check
 - [ ] **8. Showcase**: README with diagrams, governance matrix, screenshots, impact
