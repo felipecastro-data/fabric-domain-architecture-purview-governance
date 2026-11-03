@@ -75,6 +75,28 @@ flowchart LR
 The central stack is applied first. Domain teams consume its outputs (domain IDs, group IDs, label IDs, tag IDs) and
 never touch tenant-scope resources.
 
+## Features
+
+- **Data mesh on Fabric domains**: each domain owns its workspace, its data product lakehouse and three Entra groups
+  (owners, engineers, consumers), mapped to domain roles and workspace roles in Terraform.
+- **Zero-copy data products**: data product lakehouses hold only OneLake shortcuts. Producers point at the prod
+  medallion lakehouses, and the consumer domain points at the producers, so every read hits the original Delta files.
+- **Least-privilege access across hops**: OneLake security roles restrict tables at the source, and passthrough
+  shortcuts make access the intersection of every hop. Consumers get dimensions and aggregates; ride-level data is for
+  engineers only. A Terraform validation blocks roles on shortcut paths, which Fabric rejects.
+- **Purview governance as data**: a sensitivity label, tags, an endorsement level and a domain default label for every
+  data product, declared once in Terraform and applied or checked by tools.
+- **Restricted domain contributors**: only a domain's engineers group can add workspaces to it, instead of the default
+  "entire tenant".
+- **Lineage for free**: because the data is never copied, Fabric lineage shows each data product all the way back to
+  the medallion platform.
+- **Two-stack ownership**: a central governance stack (tenant scope) and a domain platform stack that reads its outputs
+  from HCP Terraform remote state, so domain changes can't touch tenant settings.
+- **Idempotent tools for API gaps**: dry run by default, exit 1 on drift, `--apply` to fix. They cover OneLake roles,
+  labels, contributor scope and tenant settings until the provider catches up.
+- **Delivery with gates**: GitHub OIDC (no cloud secrets), a plan comment per stack on every PR, an approval-gated
+  apply, a protected `main` and a required compliance check that also runs after every apply and daily.
+
 ## Governance matrix
 
 | Domain | Kind | Data product | Sensitivity label | Tags | Endorsement | OneLake roles |
@@ -191,6 +213,33 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 | CI bootstrap plan | A provider update started tracking lakehouse `tags` and planned to strip the tags the tool had applied | Tags moved into Terraform; the tool now only checks them |
 | Live consumer test | The Fabric REST API returns 401 `UserNotLicensed` for a license-free consumer, but OneLake reads work | Reader takes lakehouse GUIDs, so consumers are tested exactly as they read |
 | Code review | A required compliance check would block policy-changing PRs and every fork PR | PRs check live state against the deployed policy (base-branch tools); fork PRs skip safely |
+| Code review | A workspace created by CI already makes it Admin, so a direct Admin assignment would fail with `PrincipalAlreadyHasWorkspaceRolePermissions` | CI is a member of every owners group and inherits Admin through it |
+| Code review | One workflow-wide concurrency group let a PR plan cancel a deployment waiting for approval | Plans queue per PR and stack; applies have their own group that never cancels |
+| Code review | The plan-comment lookup read only the first page of PR comments, so busy PRs got duplicate comments | The lookup paginates over every comment |
+| Security review | PR plans run with the deployment identity, and Terraform can run code during a plan | Accepted and documented for a single maintainer; fork PRs never get credentials (see [Delivery](#delivery)) |
+
+## Results and impact
+
+| | |
+|---|---|
+| **0 bytes copied** | 12 shortcuts serve **485 MB** of Delta data and **6.0M ride rows** in place. Every data product is as fresh as prod. |
+| **Least privilege, proven live** | A license-free test consumer read 3 tables through 2 shortcut hops and was denied `fact_trips`. |
+| **Drift caught daily** | 5 checks compare the live tenant with Terraform after every apply and at 06:00 UTC: workspace domains, tenant settings, contributor scope, OneLake roles, labels, tags and endorsement. |
+| **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then 5 tools, all reporting a match. |
+| **56 resources, one source of truth** | Groups, domains, workspaces, shortcuts, roles and governance metadata are declared once; tools read them from `terraform output`. |
+
+![Effective table access per group: engineers read everything in their domain; consumers read dimensions and aggregates; owners hold no upstream role](docs/charts/access-matrix.png)
+
+Owners are workspace Admins, yet they're denied every table: Admin applies only to the domain's own workspace, and
+shortcuts need a role at every hop. Access to the data is granted on purpose, never inherited by accident.
+
+![485 MB served in place, 0 bytes copied, by data product lakehouse](docs/charts/served-in-place.png)
+
+A copy-based mesh would store `fact_trips` twice more (once per domain that exposes it) and keep both copies in sync.
+Shortcuts store nothing: the mesh adds governance, not storage or pipelines.
+
+Both charts come from [`tools/mesh_charts.py`](tools/mesh_charts.py). It computes access from the Terraform outputs
+and reads table sizes from OneLake.
 
 ## Screenshots
 
@@ -241,9 +290,9 @@ fails. The Mobility screenshot above shows the result.
 ```
 infra/terraform/governance/   tenant scope: Entra groups · domains · domain roles · default labels · tags
 infra/terraform/domains/      workspaces · data product lakehouses · roles · shortcuts · OneLake role map · governance outputs
-tools/                        idempotent tools for what the provider can't manage (+ OneLake reader for access tests)
+tools/                        idempotent tools for what the provider can't manage (+ OneLake reader, README charts)
 tools/purview/                Purview sensitivity labels and label policy (PowerShell)
-docs/                         plan, screenshots
+docs/                         plan, charts, screenshots
 .github/workflows/            ci (fmt · validate · tflint) · terraform (plan / apply) · compliance (drift check)
 ```
 
