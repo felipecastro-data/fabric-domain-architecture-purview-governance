@@ -36,3 +36,8 @@ variable "lakehouse_description" {
   description = "Description of the data product lakehouse."
   type        = string
 }
+
+variable "lakehouse_tag_ids" {
+  description = "Fabric tag IDs applied to the lakehouse."
+  type        = list(string)
+}

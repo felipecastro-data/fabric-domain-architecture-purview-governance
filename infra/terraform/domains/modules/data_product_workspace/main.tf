@@ -33,6 +33,7 @@ resource "fabric_lakehouse" "this" {
   workspace_id = fabric_workspace.this.id
   display_name = var.lakehouse_name
   description  = var.lakehouse_description
+  tags         = var.lakehouse_tag_ids
 
   configuration = {
     enable_schemas = true

@@ -16,6 +16,7 @@ locals {
   domains = data.terraform_remote_state.governance.outputs.domains
   groups  = data.terraform_remote_state.governance.outputs.groups
   labels  = data.terraform_remote_state.governance.outputs.labels
+  tags    = data.terraform_remote_state.governance.outputs.tags
   ci_sp   = data.terraform_remote_state.governance.outputs.ci_service_principal_object_id
 
   source_lakehouses = toset(distinct([
@@ -57,6 +58,7 @@ module "data_product" {
   capacity_id             = var.capacity_id
   lakehouse_name          = each.value.lakehouse
   lakehouse_description   = each.value.description
+  lakehouse_tag_ids       = [for t in each.value.tags : local.tags[t]]
   ci_service_principal_id = local.ci_sp
 
   group_ids = {
