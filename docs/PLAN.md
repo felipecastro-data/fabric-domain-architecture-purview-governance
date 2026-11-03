@@ -38,10 +38,12 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
   - [x] Live read test as `mesh-consumer-test` (member of `sg-mesh-analytics-consumers`, no Fabric license) through
     `lh_analytics` → producer → `lh_gold`: agg_daily_kpis 732, dim_station 2,028, dim_weather 365 rows; `fact_trips` denied
   - [ ] Move back to `fabric_onelake_data_access_security` when microsoft/terraform-provider-fabric#1044 ships
-- [ ] **6. Purview governance**
+- [x] **6. Purview governance**
   - [x] Sensitivity labels on the data product lakehouses (and their SQL endpoints): `tools/data_product_governance.py` (`bulkSetLabels`)
-  - [ ] Endorsement: no write API in Fabric, so a documented portal step (Mobility/Weather Certified, Analytics Promoted), verified by `tools/data_product_governance.py`
+  - [x] Endorsement: no write API in Fabric, so a documented portal step (2026-11-03: Mobility/Weather Certified, Analytics Promoted), verified by `tools/data_product_governance.py`
   - [x] Tags applied to the data product lakehouses (`applyTags`/`unapplyTags`), desired state in `var.data_products`
-  - [ ] Lineage across domains in the Fabric lineage view + Purview hub / Unified Catalog
+  - [x] Lineage across domains in the Fabric lineage view (divvy-prod `lh_gold` → `lh_mobility` → `lh_analytics`); the Purview hub is now OneLake catalog → Govern
+  - [x] Screenshots in `docs/screenshots/` (lineage, endorsed data products, domains governance, OneLake security roles)
+  - [ ] Optional: OneLake catalog tenant insights screenshot once its daily refresh picks up the domains
 - [ ] **7. CI/CD**: OIDC service principal, `terraform.yml` (plan comment on PR, approval-gated apply), governance compliance check
 - [ ] **8. Showcase**: README with diagrams, governance matrix, screenshots, impact
