@@ -49,7 +49,7 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
   - [x] Service principal `sp-fabric-mesh-governance` (GitHub OIDC; member of `sg-fabric-automation`; Graph
         `Group.ReadWrite.All` + `Directory.Read.All`; workspace Admin / source Member through Terraform)
   - [x] `terraform.yml`: plan comment per stack on PRs; governance → domains → tools apply behind `platform`
-  - [x] `compliance.yml`: read-only drift check on PRs, `main` and daily (workspace domains, tenant settings,
-        contributors, OneLake roles, labels / tags / endorsement)
+  - [x] `compliance.yml`: read-only drift check on PRs (deployed policy), after each apply and daily
+        (workspace domains, tenant settings, contributors, OneLake roles, labels / tags / endorsement)
   - [x] `main` protected: PRs only, `ci` + `compliance` required
 - [ ] **8. Showcase**: README with diagrams, governance matrix, screenshots, impact

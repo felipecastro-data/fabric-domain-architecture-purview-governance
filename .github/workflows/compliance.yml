@@ -2,9 +2,13 @@ name: compliance
 
 # Live governance state vs Terraform, read-only. Fails when any check finds drift:
 # workspace domains, tenant settings, domain contributors, OneLake roles, labels / tags / endorsement.
+# PRs check live state against the *deployed* policy (base-branch code), so a PR that changes the policy is not
+# blocked by drift it will only fix once applied; the proposed policy is checked after terraform.yml applies it.
 on:
   pull_request:
-  push:
+  workflow_run:
+    workflows: [terraform]
+    types: [completed]
     branches: [main]
   schedule:
     - cron: "0 6 * * *" # daily: catches portal changes made outside Terraform
@@ -23,9 +27,13 @@ env:
 jobs:
   compliance:
     name: compliance
+    # Fork PRs get neither the HCP token nor an OIDC token; the job is skipped, which satisfies the required check.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "~1.16"

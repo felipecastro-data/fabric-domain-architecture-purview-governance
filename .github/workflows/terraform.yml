@@ -46,7 +46,8 @@ env:
 jobs:
   plan:
     name: plan · ${{ matrix.stack }}
-    if: github.event_name == 'pull_request'
+    # Fork PRs get neither the HCP token nor an OIDC token
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
