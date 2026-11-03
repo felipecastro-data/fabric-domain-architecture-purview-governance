@@ -201,6 +201,12 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 |---|---|
 | ![OneLake catalog Govern: 3 domains, SpecificUsersAndGroups, default labels](docs/screenshots/govern-domains-scope-and-labels.jpg) | ![OneLake catalog Secure: roles on lh_gold, lh_silver and the mesh lakehouses](docs/screenshots/onelake-security-roles.jpg) |
 
+### Delivery
+
+| Terraform plan posted per stack on every pull request | Apply gated by a manual approval on `platform` |
+|---|---|
+| ![Terraform plan PR comments for the governance and domains stacks](docs/screenshots/ci-terraform-plan-pr-comments.jpg) | ![terraform apply run approved on the platform environment](docs/screenshots/ci-apply-approval-gate.jpg) |
+
 ### Manual step: endorsement
 
 Fabric has **no API** to promote or certify an item. Endorsement is set once in the portal: **workspace → item `…`
