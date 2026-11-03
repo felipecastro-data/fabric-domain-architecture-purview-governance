@@ -24,8 +24,11 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
   - [x] Sensitivity labels + policy created as code: `tools/purview/labels.ps1`
   - [x] Tenant settings as code: `tools/tenant_settings.py` (domains, certification, master data applied)
   - [ ] Label tenant settings: blocked until the published labels reach Fabric (up to 24 h), then re-run `--apply`
-  - [ ] Confirm the Fabric user can create Entra security groups (or create them once as an admin)
-- [ ] **3. Governance stack**: HCP workspace `fabric-mesh-governance`, apply groups + domains + domain roles + tags
+  - [x] Fabric user can create Entra security groups (Global Administrator)
+- [x] **3. Governance stack**: HCP workspace `fabric-mesh-governance` (local execution, state shared with `fabric-mesh-domains`);
+  applied 2026-11-03: 9 groups, 3 domains, domain admins/contributors, 4 tags
+  - [ ] Domain default labels: re-apply once the label tenant settings are on
+  - [ ] Domain contributors scope is still *entire tenant* (provider has no `contributors_scope`): restrict to the engineers group via Admin API
 - [ ] **4. Domains stack**: HCP workspace `fabric-mesh-domains`, apply workspaces + lakehouses + domain assignment + shortcuts
 - [ ] **5. Access control**: OneLake data access roles (consumers read specific tables; ride-level data restricted)
 - [ ] **6. Purview governance**
