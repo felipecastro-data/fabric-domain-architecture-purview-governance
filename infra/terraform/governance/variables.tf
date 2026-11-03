@@ -1,25 +1,29 @@
 variable "domains" {
   description = "Fabric domains of the data mesh. `kind` is producer (publishes data products) or consumer (reads them via shortcuts)."
   type = map(object({
-    display_name = string
-    description  = string
-    kind         = string
+    display_name  = string
+    description   = string
+    kind          = string
+    default_label = string
   }))
   default = {
     mobility = {
-      display_name = "Mobility"
-      description  = "Producer domain: Chicago Divvy bike-share trips, stations and daily KPIs (managed by Terraform)"
-      kind         = "producer"
+      display_name  = "Mobility"
+      description   = "Producer domain: Chicago Divvy bike-share trips, stations and daily KPIs (managed by Terraform)"
+      kind          = "producer"
+      default_label = "Confidential"
     }
     weather = {
-      display_name = "Weather"
-      description  = "Producer domain: daily Chicago weather from Open-Meteo (managed by Terraform)"
-      kind         = "producer"
+      display_name  = "Weather"
+      description   = "Producer domain: daily Chicago weather from Open-Meteo (managed by Terraform)"
+      kind          = "producer"
+      default_label = "Public"
     }
     analytics = {
-      display_name = "Analytics"
-      description  = "Consumer domain: cross-domain analysis built on Mobility and Weather data products (managed by Terraform)"
-      kind         = "consumer"
+      display_name  = "Analytics"
+      description   = "Consumer domain: cross-domain analysis built on Mobility and Weather data products (managed by Terraform)"
+      kind          = "consumer"
+      default_label = "Confidential"
     }
   }
 
@@ -40,8 +44,8 @@ variable "admin_user_object_id" {
   type        = string
 }
 
-variable "domain_default_label_ids" {
-  description = "Optional Purview sensitivity label ID applied by default to new items in each domain (key = domain key). Empty until labels are published."
+variable "sensitivity_label_ids" {
+  description = "Purview label display name => label ID. Written by tools/purview/labels.ps1 (labels.auto.tfvars.json, gitignored); empty until labels are published."
   type        = map(string)
   default     = {}
 }

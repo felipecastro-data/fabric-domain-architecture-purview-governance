@@ -42,7 +42,7 @@ resource "fabric_domain" "this" {
 
   display_name     = each.value.display_name
   description      = each.value.description
-  default_label_id = lookup(var.domain_default_label_ids, each.key, null)
+  default_label_id = lookup(var.sensitivity_label_ids, each.value.default_label, null)
 }
 
 resource "fabric_domain_role_assignments" "admins" {

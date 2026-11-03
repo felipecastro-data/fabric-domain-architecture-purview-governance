@@ -10,7 +10,7 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
 |---|---|
 | Domains | **Mobility**, **Weather** (producers) → **Analytics** (consumer) |
 | Data | Divvy trips + Open-Meteo weather from the medallion repo's prod gold/silver lakehouses |
-| Licensing | Fabric trial capacity + **Microsoft Purview suite trial** (sensitivity labels) |
+| Licensing | Fabric trial capacity + **Microsoft 365 E5 Information Protection & Governance trial** (Purview Suite is an add-on that needs a base M365 license) |
 | IaC | Terraform `microsoft/fabric` 1.14 + `hashicorp/azuread`, HCP Terraform remote state |
 | Stacks | `governance` (tenant: groups, domains, domain roles, tags) and `domains` (workspaces, lakehouses, shortcuts, OneLake roles) |
 | Not in Terraform | Applying labels to items (Admin REST `bulkSetLabels`), endorsement, applying tags to items → Python tools in `tools/` |
@@ -20,8 +20,10 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
 - [x] **0. Plan**: scope, risks, provider coverage checked
 - [x] **1. Scaffold**: repo layout, both Terraform stacks, `ci` (fmt · validate · tflint)
 - [ ] **2. Prerequisites**
-  - [ ] Purview suite trial started, license assigned to the Fabric user
-  - [ ] Tenant settings: domains, OneLake security, tags, service principals can use Fabric APIs
+  - [x] E5 Information Protection & Governance trial started (2026-11-03, 1 month), license assigned to the Fabric user
+  - [x] Sensitivity labels + policy created as code: `tools/purview/labels.ps1`
+  - [x] Tenant settings as code: `tools/tenant_settings.py` (domains, certification, master data applied)
+  - [ ] Label tenant settings: blocked until the published labels reach Fabric (up to 24 h), then re-run `--apply`
   - [ ] Confirm the Fabric user can create Entra security groups (or create them once as an admin)
 - [ ] **3. Governance stack**: HCP workspace `fabric-mesh-governance`, apply groups + domains + domain roles + tags
 - [ ] **4. Domains stack**: HCP workspace `fabric-mesh-domains`, apply workspaces + lakehouses + domain assignment + shortcuts

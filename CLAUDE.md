@@ -15,6 +15,9 @@ az rest --method get --resource https://api.fabric.microsoft.com \
   --url https://api.fabric.microsoft.com/v1/admin/domains -o json
 ```
 
+PowerShell (labels): portable install at `~/.local/bin/pwsh` with ExchangeOnlineManagement
+(`pwsh tools/purview/labels.ps1 -UserPrincipalName <upn>` opens a browser sign-in).
+
 ## Rules
 
 - Two Terraform stacks, applied in order: `infra/terraform/governance` (tenant scope) → `infra/terraform/domains`
