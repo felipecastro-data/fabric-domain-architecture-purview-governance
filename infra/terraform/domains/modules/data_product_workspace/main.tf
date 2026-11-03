@@ -5,14 +5,13 @@ resource "fabric_workspace" "this" {
 }
 
 # Workspace roles follow the domain's Entra groups (the human admin is a member of every owners group; the identity
-# running Terraform is Admin as creator; the CI service principal is Admin explicitly). Consumers are Viewers: with OneLake security enabled, Viewers only see the
+# running Terraform is Admin as creator; the CI service principal is a member of every owners group). Consumers are Viewers: with OneLake security enabled, Viewers only see the
 # tables a OneLake data access role grants them.
 locals {
   role_assignments = {
     owners    = { id = var.group_ids.owners, type = "Group", role = "Admin" }
     engineers = { id = var.group_ids.engineers, type = "Group", role = "Contributor" }
     consumers = { id = var.group_ids.consumers, type = "Group", role = "Viewer" }
-    ci        = { id = var.ci_service_principal_id, type = "ServicePrincipal", role = "Admin" }
   }
 }
 

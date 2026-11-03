@@ -45,7 +45,7 @@ variable "admin_user_object_id" {
 }
 
 variable "ci_service_principal_object_id" {
-  description = "Entra object ID of the CI service principal (GitHub OIDC). Owner of every group and Admin of every mesh workspace, so local and CI runs plan the same."
+  description = "Entra object ID of the CI service principal (GitHub OIDC). Owner of every group and member of every owners group (workspace Admin), so local and CI runs plan the same."
   type        = string
 }
 
