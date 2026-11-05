@@ -19,7 +19,7 @@ data. This repository adds the mesh and the governance on top, without moving a 
 | Domains | **3 Fabric domains**: Mobility and Weather (producers), Analytics (consumer). Each has an owners, engineers and consumers Entra group. |
 | Data products | **12 OneLake shortcuts**, **0 copies**. `fact_trips` (**6.0M rows**) is read through 2 shortcut hops from the prod medallion lakehouse. |
 | Access | **6 OneLake security roles**. Consumers read dimensions and aggregates only; ride-level data is for engineers. Verified live as a consumer test user. |
-| Governance | Sensitivity labels, tags, endorsement and domain contributor scope for every data product, all declared in Terraform. |
+| Governance | Sensitivity labels, tags, endorsement and domain contributor scope for every data product, all declared in Terraform. An **ODCS v3.1 data contract** per product (schema, owners, freshness SLA, classification). |
 | As code | **56 Terraform resources** in 2 stacks, plus **5 idempotent Python tools** for what the provider can't manage. |
 | Delivery | GitHub OIDC (no secrets), a plan comment per stack on every PR, an approval-gated apply, and a required **compliance** check that also runs daily. |
 
@@ -94,6 +94,10 @@ never touch tenant-scope resources.
   from HCP Terraform remote state, so domain changes can't touch tenant settings.
 - **Idempotent tools for API gaps**: dry run by default, exit 1 on drift, `--apply` to fix. They cover OneLake roles,
   labels, contributor scope and tenant settings until the provider catches up.
+- **Data contracts**: one [ODCS v3.1](https://bitol-io.github.io/open-data-contract-standard/) contract per data
+  product in [`contracts/`](contracts). Every day CI reads each table through its product lakehouse and fails on a
+  missing or retyped column, an empty table, or a shortcut chain that doesn't end in `divvy-medallion-prod`. A
+  separate job alerts when a product is older than its 8-day freshness SLA.
 - **Delivery with gates**: GitHub OIDC (no cloud secrets), a plan comment per stack on every PR, an approval-gated
   apply, a protected `main` and a required compliance check that also runs after every apply and daily.
 
@@ -161,7 +165,8 @@ group alone does not: workspace Admin applies only in the domain's own workspace
 flowchart LR
     PR["Pull request"] -->|"ci: fmt · validate · tflint · ruff · pytest<br/>terraform: plan comment per stack<br/>compliance: live state vs deployed policy"| Main["main (protected)"]
     Main -->|"approval: platform"| Apply["apply governance → domains<br/>then tools: tenant settings · contributors<br/>OneLake roles · tags · label/endorsement check"]
-    Apply --> C["compliance<br/>after every apply + daily 06:00 UTC"]
+    Apply --> C["compliance + data contracts<br/>after every apply + daily 06:00 UTC"]
+    Apply --> F["data freshness (alert)<br/>8-day latency SLA"]
 ```
 
 - **No secrets**: the CI service principal signs in with GitHub OIDC federated credentials. The HCP Terraform token
@@ -173,7 +178,8 @@ flowchart LR
   9 mesh groups.
 - **`main` is protected**: changes land through PRs only, `ci` and `compliance` are required, and review threads must be resolved.
 - **Compliance** fails the build when any of these drifts from Terraform: a workspace's domain, a tenant setting, a
-  domain's contributor scope, a OneLake role, a label, a tag set or an endorsement.
+  domain's contributor scope, a OneLake role, a label, a tag set or an endorsement; or when a data product breaks its
+  contract (schema, row counts, lineage). Freshness runs as a separate, non-required `data freshness` job.
 - **Accepted trade-off: PR plans use the deployment identity.** Providers and data sources can run code during
   `terraform plan`, so a pull request from someone with write access could act with the CI service principal before
   the `platform` approval. Fork PRs never get the credentials: their plan and compliance jobs are skipped. With a
@@ -192,6 +198,7 @@ flowchart LR
 | Domain contributor scope | [`domain_contributors.py`](src/fabric_mesh_tools/domain_contributors.py) | Admin API (`contributorsScope` is preview-only) |
 | Tenant settings (labels, endorsement, domains) | [`tenant_settings.py`](src/fabric_mesh_tools/tenant_settings.py) | Admin API |
 | Purview labels and label policy | [`purview/labels.ps1`](tools/purview/labels.ps1) | Security & Compliance PowerShell |
+| Data contracts: schema, row counts, lineage, freshness | [`contracts/*.yml`](contracts) → [`data_contracts.py`](src/fabric_mesh_tools/data_contracts.py) | Delta log over OneLake (delta-rs) + shortcuts API; validated against the ODCS JSON schema |
 | **Endorsement** | **Portal** (no write API exists) | Set once in item settings. Terraform declares it, and the compliance check fails while it differs. |
 
 The Python tools are idempotent. Each runs as a dry run by default, exits 1 on drift, and makes changes only with
@@ -226,6 +233,9 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 | **Least privilege, proven live** | A license-free test consumer read 3 tables through 2 shortcut hops and was denied `fact_trips`. |
 | **Drift caught daily** | 5 checks compare the live tenant with Terraform after every apply and at 06:00 UTC: workspace domains, tenant settings, contributor scope, OneLake roles, labels, tags and endorsement. |
 | **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then 5 tools, all reporting a match. |
+| **Fast feedback** | A no-change apply takes **9 s** (governance) and **14 s** (domains), plus **15 s** for the 5 tools. The daily compliance run takes **30–50 s**. |
+| **Hops are free** | Reading all 6,006,901 rows of `fact_trips` took **13.0 s through 2 shortcut hops and 13.0 s from `lh_gold` directly** (median of 3). Zero-copy costs nothing at read time. |
+| **Contracts enforced** | 3 ODCS contracts cover 12 tables. Every table is checked daily for schema, row count and a lineage chain that ends in `divvy-medallion-prod`. |
 | **56 resources, one source of truth** | Groups, domains, workspaces, shortcuts, roles and governance metadata are declared once; tools read them from `terraform output`. |
 
 ![Effective table access per group: engineers read everything in their domain; consumers read dimensions and aggregates; owners hold no upstream role](docs/charts/access-matrix.png)
@@ -279,10 +289,10 @@ fails. The Mobility screenshot above shows the result.
 | Area | Tools |
 |---|---|
 | Platform | Microsoft Fabric: Domains, Lakehouse, OneLake shortcuts, OneLake security, OneLake catalog |
-| Governance | Microsoft Purview Information Protection (sensitivity labels), Fabric endorsement, tags, lineage, scanner API |
+| Governance | Microsoft Purview Information Protection (sensitivity labels), Fabric endorsement, tags, lineage, scanner API, ODCS v3.1 data contracts |
 | Identity | Microsoft Entra ID groups, service principal with GitHub OIDC federated credentials |
 | Infrastructure as code | Terraform `microsoft/fabric` + `hashicorp/azuread`, HCP Terraform remote state, tflint |
-| Automation | Python 3.12 package (standard library only) on the Fabric REST and Admin APIs, uv, ruff, pytest; PowerShell for Purview labels |
+| Automation | Python 3.12 package on the Fabric REST and Admin APIs (standard library; delta-rs, PyYAML and jsonschema for the contracts), uv, ruff, pytest; PowerShell for Purview labels |
 | CI/CD | GitHub Actions, environments with required reviewers, protected `main`, scheduled compliance |
 
 ## Repository layout
@@ -294,6 +304,7 @@ src/fabric_mesh_tools/        Python package: idempotent tools for what the prov
 tests/                        pytest on fixture JSON (no network): role diffing, change detection, access through hops
 tools/purview/                Purview sensitivity labels and label policy (PowerShell)
 Makefile                      make check · plan · apply
+contracts/                    ODCS v3.1 data contracts, one per data product (+ the vendored ODCS JSON schema)
 docs/                         design (scalability · cost · governance · security), ADRs, plan, charts, screenshots
 .github/workflows/            ci (fmt · validate · tflint) · terraform (plan / apply) · compliance (drift check)
 ```
@@ -339,6 +350,7 @@ Progress is in [docs/PLAN.md](docs/PLAN.md). Working conventions are in [CLAUDE.
   - [0003](docs/adr/0003-onelake-roles-via-python-upsert.md) OneLake roles through a Python upsert until the provider is fixed
   - [0004](docs/adr/0004-pr-plan-identity.md) PR plans run with the deployment identity (accepted risk)
   - [0005](docs/adr/0005-plan-file-in-git-history.md) a removed plan file stays in git history (accepted)
+  - [0006](docs/adr/0006-data-contracts-odcs.md) data contracts in ODCS v3.1, checked against the live tables
 
 ## 🏅 Author & Certifications
 

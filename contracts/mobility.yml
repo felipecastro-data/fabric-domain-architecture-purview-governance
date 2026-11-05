@@ -1,0 +1,347 @@
+# Mobility · Divvy trips data contract (ODCS v3.1). Checked daily by `data-contracts` (schema, row counts, lineage)
+# and `data-freshness` (latency SLA). Scaffolded with `data-contracts --scaffold mobility`.
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:fabric-mesh:mobility
+name: Mobility · Divvy trips
+version: 1.0.0
+status: active
+domain: mobility
+dataProduct: lh_mobility
+tenant: fabric-mesh
+tags:
+- data-product
+- source-aligned
+description:
+  purpose: Chicago Divvy bike-share trips as a star schema with daily and monthly KPIs.
+  usage: Demand analysis, station rebalancing, member vs casual behaviour. Consumers read dimensions and aggregates; fact_trips
+    needs the engineers role.
+  limitations: 'Monthly source files: the latest month lands after Divvy publishes it (about 1 month lag). Weekly refresh.'
+schema:
+- name: agg_daily_kpis
+  physicalName: agg_daily_kpis
+  physicalType: table
+  description: Daily trips and duration KPIs per member type, joined with that day's weather.
+  properties:
+  - name: date_key
+    logicalType: integer
+    physicalType: integer
+    primaryKey: true
+    primaryKeyPosition: 1
+  - name: member_type
+    logicalType: string
+    physicalType: string
+    primaryKey: true
+    primaryKeyPosition: 2
+  - name: trips
+    logicalType: integer
+    physicalType: long
+  - name: total_duration_min
+    logicalType: number
+    physicalType: double
+  - name: avg_duration_min
+    logicalType: number
+    physicalType: double
+  - name: median_duration_min
+    logicalType: number
+    physicalType: double
+  - name: avg_distance_km
+    logicalType: number
+    physicalType: double
+  - name: electric_share
+    logicalType: number
+    physicalType: double
+  - name: round_trip_share
+    logicalType: number
+    physicalType: double
+  - name: dockless_share
+    logicalType: number
+    physicalType: double
+  - name: condition
+    logicalType: string
+    physicalType: string
+  - name: temperature_2m_mean
+    logicalType: number
+    physicalType: double
+  - name: precipitation_sum
+    logicalType: number
+    physicalType: double
+  - name: is_wet_day
+    logicalType: boolean
+    physicalType: boolean
+  - name: trip_month
+    logicalType: string
+    physicalType: string
+    partitioned: true
+  quality:
+  - name: not empty
+    type: library
+    metric: rowCount
+    mustBeGreaterThan: 0
+    dimension: completeness
+    severity: error
+  logicalType: object
+- name: agg_station_monthly
+  physicalName: agg_station_monthly
+  physicalType: table
+  description: Trips started and ended per station and month, with net flow.
+  properties:
+  - name: station_key
+    logicalType: integer
+    physicalType: long
+    primaryKey: true
+    primaryKeyPosition: 1
+  - name: trips_started
+    logicalType: integer
+    physicalType: long
+  - name: trips_ended
+    logicalType: integer
+    physicalType: long
+  - name: net_flow
+    logicalType: integer
+    physicalType: long
+  - name: member_trips_started
+    logicalType: integer
+    physicalType: long
+  - name: member_share
+    logicalType: number
+    physicalType: double
+  - name: avg_duration_min
+    logicalType: number
+    physicalType: double
+  - name: trip_month
+    logicalType: string
+    physicalType: string
+    primaryKey: true
+    primaryKeyPosition: 2
+    partitioned: true
+  quality:
+  - name: not empty
+    type: library
+    metric: rowCount
+    mustBeGreaterThan: 0
+    dimension: completeness
+    severity: error
+  logicalType: object
+- name: dim_date
+  physicalName: dim_date
+  physicalType: table
+  description: Calendar with US holidays, one row per date.
+  properties:
+  - name: date_key
+    logicalType: integer
+    physicalType: integer
+    primaryKey: true
+    primaryKeyPosition: 1
+  - name: date
+    logicalType: date
+    physicalType: date
+  - name: year
+    logicalType: integer
+    physicalType: integer
+  - name: quarter
+    logicalType: integer
+    physicalType: integer
+  - name: month
+    logicalType: integer
+    physicalType: integer
+  - name: month_name
+    logicalType: string
+    physicalType: string
+  - name: period
+    logicalType: string
+    physicalType: string
+  - name: day
+    logicalType: integer
+    physicalType: integer
+  - name: day_of_week
+    logicalType: integer
+    physicalType: integer
+  - name: day_name
+    logicalType: string
+    physicalType: string
+  - name: iso_week
+    logicalType: integer
+    physicalType: integer
+  - name: is_weekend
+    logicalType: boolean
+    physicalType: boolean
+  - name: is_holiday
+    logicalType: boolean
+    physicalType: boolean
+  - name: holiday_name
+    logicalType: string
+    physicalType: string
+  quality:
+  - name: not empty
+    type: library
+    metric: rowCount
+    mustBeGreaterThan: 0
+    dimension: completeness
+    severity: error
+  logicalType: object
+- name: dim_station
+  physicalName: dim_station
+  physicalType: table
+  description: 'Stations as SCD2 versions: a new version per rename or relocation.'
+  properties:
+  - name: station_version_key
+    logicalType: integer
+    physicalType: long
+    primaryKey: true
+    primaryKeyPosition: 1
+  - name: station_key
+    logicalType: integer
+    physicalType: long
+  - name: station_id
+    logicalType: string
+    physicalType: string
+  - name: station_name
+    logicalType: string
+    physicalType: string
+  - name: latitude
+    logicalType: number
+    physicalType: double
+  - name: longitude
+    logicalType: number
+    physicalType: double
+  - name: first_seen
+    logicalType: date
+    physicalType: date
+  - name: last_seen
+    logicalType: date
+    physicalType: date
+  - name: is_dockless
+    logicalType: boolean
+    physicalType: boolean
+  - name: valid_from
+    logicalType: timestamp
+    physicalType: timestamp
+  - name: valid_to
+    logicalType: timestamp
+    physicalType: timestamp
+  - name: is_current
+    logicalType: boolean
+    physicalType: boolean
+  - name: change_reason
+    logicalType: string
+    physicalType: string
+  quality:
+  - name: not empty
+    type: library
+    metric: rowCount
+    mustBeGreaterThan: 0
+    dimension: completeness
+    severity: error
+  logicalType: object
+- name: fact_trips
+  physicalName: fact_trips
+  physicalType: table
+  description: 'One row per Divvy ride (deduplicated, quarantined rows removed). Ride-level: engineers only.'
+  properties:
+  - name: ride_id
+    logicalType: string
+    physicalType: string
+    primaryKey: true
+    primaryKeyPosition: 1
+    classification: confidential
+  - name: date_key
+    logicalType: integer
+    physicalType: integer
+  - name: start_hour
+    logicalType: integer
+    physicalType: integer
+  - name: start_station_key
+    logicalType: integer
+    physicalType: long
+    classification: confidential
+  - name: end_station_key
+    logicalType: integer
+    physicalType: long
+    classification: confidential
+  - name: rideable_type
+    logicalType: string
+    physicalType: string
+  - name: member_type
+    logicalType: string
+    physicalType: string
+  - name: started_at
+    logicalType: timestamp
+    physicalType: timestamp
+    classification: confidential
+  - name: ended_at
+    logicalType: timestamp
+    physicalType: timestamp
+    classification: confidential
+  - name: duration_min
+    logicalType: number
+    physicalType: double
+  - name: distance_km
+    logicalType: number
+    physicalType: double
+  - name: is_round_trip
+    logicalType: boolean
+    physicalType: boolean
+  - name: is_dockless
+    logicalType: boolean
+    physicalType: boolean
+  - name: is_electric
+    logicalType: boolean
+    physicalType: boolean
+  - name: _bronze_batch_id
+    logicalType: string
+    physicalType: string
+  - name: _period
+    logicalType: string
+    physicalType: string
+    partitioned: true
+  quality:
+  - name: not empty
+    type: library
+    metric: rowCount
+    mustBeGreaterThan: 0
+    dimension: completeness
+    severity: error
+  logicalType: object
+team:
+  name: Mobility domain
+  members:
+  - username: sg-mesh-mobility-owners
+    role: owner
+    description: Domain admins, workspace Admins
+  - username: sg-mesh-mobility-engineers
+    role: data engineer
+    description: Workspace Contributors
+roles:
+- role: sg-mesh-mobility-consumers
+  access: read
+  description: dim_station, dim_date, agg_daily_kpis, agg_station_monthly
+- role: sg-mesh-mobility-engineers
+  access: read
+  description: every table, including ride-level fact_trips
+- role: sg-mesh-analytics-consumers
+  access: read
+  description: dimensions and aggregates, through lh_analytics
+- role: sg-mesh-analytics-engineers
+  access: read
+  description: every table, through lh_analytics
+support:
+- channel: github-issues
+  url: https://github.com/felipecastro-data/fabric-domain-architecture-purview-governance/issues
+slaProperties:
+- property: latency
+  value: 8
+  unit: d
+  driver: analytics
+  description: 'Newest write across the product''s tables is at most 8 days old: the weekly prod schedule plus a day.'
+  scheduler: cron
+  schedule: 0 6 * * *
+customProperties:
+- property: sourceWorkspace
+  value: divvy-medallion-prod
+  description: Every table's shortcut chain must end here (lineage check).
+- property: sensitivityLabel
+  value: Confidential
+  description: Purview label, enforced by data-product-governance.
+- property: producedBy
+  value: https://github.com/felipecastro-data/fabric-medallion-cicd-terraform

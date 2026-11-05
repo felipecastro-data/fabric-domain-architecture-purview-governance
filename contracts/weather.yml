@@ -1,0 +1,173 @@
+# Weather · Open-Meteo daily data contract (ODCS v3.1). Checked daily by `data-contracts` (schema, row counts, lineage)
+# and `data-freshness` (latency SLA). Scaffolded with `data-contracts --scaffold weather`.
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:fabric-mesh:weather
+name: Weather · Open-Meteo daily
+version: 1.0.0
+status: active
+domain: weather
+dataProduct: lh_weather
+tenant: fabric-mesh
+tags:
+- data-product
+- source-aligned
+description:
+  purpose: Daily Chicago weather, raw (silver) and as a conformed dimension.
+  usage: Join on date_key with mobility facts and aggregates to explain demand.
+  limitations: Daily granularity, one location (Chicago). Weekly refresh.
+schema:
+- name: dim_weather
+  physicalName: dim_weather
+  physicalType: table
+  description: Daily Chicago weather from Open-Meteo, one row per date, with derived bands.
+  properties:
+  - name: date_key
+    logicalType: integer
+    physicalType: integer
+    primaryKey: true
+    primaryKeyPosition: 1
+  - name: date
+    logicalType: date
+    physicalType: date
+  - name: weather_code
+    logicalType: integer
+    physicalType: integer
+  - name: condition
+    logicalType: string
+    physicalType: string
+  - name: temperature_2m_max
+    logicalType: number
+    physicalType: double
+  - name: temperature_2m_min
+    logicalType: number
+    physicalType: double
+  - name: temperature_2m_mean
+    logicalType: number
+    physicalType: double
+  - name: temperature_band
+    logicalType: string
+    physicalType: string
+  - name: precipitation_sum
+    logicalType: number
+    physicalType: double
+  - name: rain_sum
+    logicalType: number
+    physicalType: double
+  - name: snowfall_sum
+    logicalType: number
+    physicalType: double
+  - name: wind_speed_10m_max
+    logicalType: number
+    physicalType: double
+  - name: is_wet_day
+    logicalType: boolean
+    physicalType: boolean
+  quality:
+  - name: not empty
+    type: library
+    metric: rowCount
+    mustBeGreaterThan: 0
+    dimension: completeness
+    severity: error
+  logicalType: object
+- name: weather_daily
+  physicalName: weather_daily
+  physicalType: table
+  description: Cleaned daily Open-Meteo observations (silver), one row per date.
+  properties:
+  - name: date
+    logicalType: date
+    physicalType: date
+    primaryKey: true
+    primaryKeyPosition: 1
+  - name: weather_code
+    logicalType: integer
+    physicalType: integer
+  - name: condition
+    logicalType: string
+    physicalType: string
+  - name: temperature_2m_max
+    logicalType: number
+    physicalType: double
+  - name: temperature_2m_min
+    logicalType: number
+    physicalType: double
+  - name: temperature_2m_mean
+    logicalType: number
+    physicalType: double
+  - name: precipitation_sum
+    logicalType: number
+    physicalType: double
+  - name: rain_sum
+    logicalType: number
+    physicalType: double
+  - name: snowfall_sum
+    logicalType: number
+    physicalType: double
+  - name: wind_speed_10m_max
+    logicalType: number
+    physicalType: double
+  - name: is_wet_day
+    logicalType: boolean
+    physicalType: boolean
+  - name: _batch_id
+    logicalType: string
+    physicalType: string
+  - name: _ingested_at
+    logicalType: timestamp
+    physicalType: timestamp
+  - name: _period
+    logicalType: string
+    physicalType: string
+    partitioned: true
+  quality:
+  - name: not empty
+    type: library
+    metric: rowCount
+    mustBeGreaterThan: 0
+    dimension: completeness
+    severity: error
+  logicalType: object
+team:
+  name: Weather domain
+  members:
+  - username: sg-mesh-weather-owners
+    role: owner
+    description: Domain admins, workspace Admins
+  - username: sg-mesh-weather-engineers
+    role: data engineer
+    description: Workspace Contributors
+roles:
+- role: sg-mesh-weather-consumers
+  access: read
+  description: dim_weather, weather_daily
+- role: sg-mesh-weather-engineers
+  access: read
+  description: dim_weather, weather_daily
+- role: sg-mesh-analytics-consumers
+  access: read
+  description: dim_weather, through lh_analytics
+- role: sg-mesh-analytics-engineers
+  access: read
+  description: dim_weather, through lh_analytics
+support:
+- channel: github-issues
+  url: https://github.com/felipecastro-data/fabric-domain-architecture-purview-governance/issues
+slaProperties:
+- property: latency
+  value: 8
+  unit: d
+  driver: analytics
+  description: 'Newest write across the product''s tables is at most 8 days old: the weekly prod schedule plus a day.'
+  scheduler: cron
+  schedule: 0 6 * * *
+customProperties:
+- property: sourceWorkspace
+  value: divvy-medallion-prod
+  description: Every table's shortcut chain must end here (lineage check).
+- property: sensitivityLabel
+  value: Public
+  description: Purview label, enforced by data-product-governance.
+- property: producedBy
+  value: https://github.com/felipecastro-data/fabric-medallion-cicd-terraform

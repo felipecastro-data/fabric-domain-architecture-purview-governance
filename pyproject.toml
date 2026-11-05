@@ -4,10 +4,10 @@ version = "0.1.0"
 description = "Idempotent tools for the Fabric data mesh settings the Terraform provider cannot manage, plus compliance checks"
 license = "MIT"
 requires-python = ">=3.12"
-dependencies = []  # the governance tools use the standard library only
+dependencies = ["pyyaml>=6", "jsonschema>=4.23"]  # contracts; the governance tools use the standard library only
 
 [project.optional-dependencies]
-onelake = ["deltalake>=1.1", "pyarrow>=20", "pandas>=2.2"]  # read_onelake, mesh_charts
+onelake = ["deltalake>=1.1", "pyarrow>=20", "pandas>=2.2"]  # read_onelake, mesh_charts, data contracts
 charts = ["matplotlib>=3.10"]                                # mesh_charts
 
 [project.scripts]
@@ -18,6 +18,8 @@ data-product-governance = "fabric_mesh_tools.data_product_governance:main"
 workspace-domains = "fabric_mesh_tools.workspace_domains:main"
 read-onelake = "fabric_mesh_tools.read_onelake:main"
 mesh-charts = "fabric_mesh_tools.mesh_charts:main"
+data-contracts = "fabric_mesh_tools.data_contracts:main"
+data-freshness = "fabric_mesh_tools.data_contracts:main_freshness"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
