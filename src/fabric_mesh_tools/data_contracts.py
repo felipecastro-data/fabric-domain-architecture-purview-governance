@@ -9,7 +9,10 @@
 * the contract is valid against the vendored ODCS JSON schema;
 * every contracted column exists with the same Delta type (missing or retyped = breaking; new columns are reported);
 * ``rowCount`` quality rules hold, from the Delta log statistics (no table scan);
-* lineage: following each table's OneLake shortcuts ends in the contract's ``sourceWorkspace``.
+* lineage: following each table's OneLake shortcuts ends in the environment's source workspace (Terraform output
+  ``source_workspace_name``), which in prod must be the contract's ``sourceWorkspace``.
+
+``MESH_ENV`` (dev | prod, default prod) selects the environment.
 
 ``data-freshness`` (separate, non-required job): the newest Delta commit across a product's tables is younger than the
 contract's ``latency`` SLA. It alerts on a stale upstream without blocking mesh PRs, which cannot fix it.
@@ -122,6 +125,13 @@ def follow_shortcuts(start: tuple[str, str], table: str, lookup) -> list[tuple[s
     raise SystemExit(f"{table}: more than 10 shortcut hops from {start}")
 
 
+def expected_source(contracted: str | None, env: str, env_source: str) -> str:
+    """The workspace lineage must end in. The contract states prod's source; other environments read their own."""
+    if env == "prod" and contracted and contracted != env_source:
+        raise SystemExit(f"Contract sourceWorkspace {contracted} differs from Terraform's prod source {env_source}")
+    return env_source
+
+
 def stale(last_commit: datetime, max_age: timedelta, now: datetime) -> bool:
     return now - last_commit > max_age
 
@@ -196,6 +206,8 @@ def products() -> dict[str, dict]:
 def check(contracts: dict[str, dict]) -> int:
     """Validate and check every contract; returns the number of failures."""
     workspaces, shortcuts, failures = products(), Shortcuts(), 0
+    env = terraform.environment()
+    env_source = terraform.output(terraform.DOMAINS_STACK, "source_workspace_name")
     for file, contract in contracts.items():
         print(f"== {file}  ({contract['domain']} · {contract['dataProduct']} · v{contract['version']})")
         errors = validate(contract)
@@ -204,7 +216,7 @@ def check(contracts: dict[str, dict]) -> int:
         failures += len(errors)
         product = workspaces[contract["domain"]]
         start = (product["workspace_id"], product["lakehouse_id"])
-        source = custom(contract, "sourceWorkspace")
+        source = expected_source(custom(contract, "sourceWorkspace"), env, env_source)
         for table in contract["schema"]:
             name = table["physicalName"] if "physicalName" in table else table["name"]
             live = live_table(*start, name)

@@ -21,7 +21,7 @@ data. This repository adds the mesh and the governance on top, without moving a 
 | Access | **6 OneLake security roles**. Consumers read dimensions and aggregates only; ride-level data is for engineers. Verified live as a consumer test user. |
 | Governance | Sensitivity labels, tags, endorsement and domain contributor scope for every data product, all declared in Terraform. An **ODCS v3.1 data contract** per product (schema, owners, freshness SLA, classification). |
 | As code | **56 Terraform resources** in 2 stacks, plus **5 idempotent Python tools** for what the provider can't manage. |
-| Delivery | GitHub OIDC (no secrets), a plan comment per stack on every PR, an approval-gated apply, and a required **compliance** check that also runs daily. |
+| Delivery | **dev → prod**: every change is applied to `mesh-*-dev` (on `divvy-medallion-dev`) and checked before an approval releases it to prod. GitHub OIDC (no secrets), a plan comment per stack and environment on every PR, and a required **compliance** check that also runs daily. |
 
 ## Architecture
 
@@ -98,8 +98,12 @@ never touch tenant-scope resources.
   product in [`contracts/`](contracts). Every day CI reads each table through its product lakehouse and fails on a
   missing or retyped column, an empty table, or a shortcut chain that doesn't end in `divvy-medallion-prod`. A
   separate job alerts when a product is older than its 8-day freshness SLA.
-- **Delivery with gates**: GitHub OIDC (no cloud secrets), a plan comment per stack on every PR, an approval-gated
-  apply, a protected `main` and a required compliance check that also runs after every apply and daily.
+- **Environment promotion**: the domains stack runs as dev (`mesh-<domain>-dev`, reading `divvy-medallion-dev`) and
+  prod, each with its own HCP state. CI applies dev and checks it (roles, labels, contracts) before prod is offered for
+  approval. Tenant-scope governance is shared and gets its own approval.
+- **Delivery with gates**: GitHub OIDC (no cloud secrets), a plan comment per stack and environment on every PR, an
+  approval-gated prod apply, a protected `main` and a required compliance check that also runs after every apply and
+  daily.
 
 ## Governance matrix
 
@@ -163,10 +167,14 @@ group alone does not: workspace Admin applies only in the domain's own workspace
 
 ```mermaid
 flowchart LR
-    PR["Pull request"] -->|"ci: fmt · validate · tflint · ruff · pytest<br/>terraform: plan comment per stack<br/>compliance: live state vs deployed policy"| Main["main (protected)"]
-    Main -->|"approval: platform"| Apply["apply governance → domains<br/>then tools: tenant settings · contributors<br/>OneLake roles · tags · label/endorsement check"]
-    Apply --> C["compliance + data contracts<br/>after every apply + daily 06:00 UTC"]
-    Apply --> F["data freshness (alert)<br/>8-day latency SLA"]
+    PR["Pull request"] -->|"ci: fmt · validate · tflint · ruff · pytest<br/>terraform: plan governance · dev · prod<br/>compliance: live state vs deployed policy"| Main["main (protected)"]
+    Main --> GP{"governance<br/>plan has changes?"}
+    GP -->|"yes · approval: platform"| G["apply governance<br/>(tenant scope)"]
+    GP -->|no| Dev
+    G --> Dev["apply · dev<br/>mesh-*-dev on divvy-medallion-dev<br/>roles · labels · contracts checked"]
+    Dev -->|"approval: platform"| Prod["apply · prod<br/>mesh-* on divvy-medallion-prod<br/>tenant settings · contributors · roles · labels"]
+    Prod --> C["compliance (prod, required) · compliance · dev<br/>after every apply + daily 06:00 UTC"]
+    Prod --> F["data freshness (alert)<br/>8-day latency SLA"]
 ```
 
 - **No secrets**: the CI service principal signs in with GitHub OIDC federated credentials. The HCP Terraform token
@@ -232,6 +240,7 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 | **0 bytes copied** | 12 shortcuts serve **485 MB** of Delta data and **6.0M ride rows** in place. Every data product is as fresh as prod. |
 | **Least privilege, proven live** | A license-free test consumer read 3 tables through 2 shortcut hops and was denied `fact_trips`. |
 | **Drift caught daily** | 5 checks compare the live tenant with Terraform after every apply and at 06:00 UTC: workspace domains, tenant settings, contributor scope, OneLake roles, labels, tags and endorsement. |
+| **Promotion without risk** | Adding environments planned **0 changes in prod**. Dev runs the same 31 resources against `divvy-medallion-dev` (1.6M trips) and must pass its contracts before prod can be approved. |
 | **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then 5 tools, all reporting a match. |
 | **Fast feedback** | A no-change apply takes **9 s** (governance) and **14 s** (domains), plus **15 s** for the 5 tools. The daily compliance run takes **30–50 s**. |
 | **Hops are free** | Reading all 6,006,901 rows of `fact_trips` took **13.0 s through 2 shortcut hops and 13.0 s from `lh_gold` directly** (median of 3). Zero-copy costs nothing at read time. |
@@ -317,7 +326,8 @@ Terraform organization, and the medallion platform from the
 
 1. Point Terraform at your HCP organization. Replace `felipecastro-data` in both stacks' `versions.tf` `cloud`
    blocks and in the `terraform_remote_state` block of `infra/terraform/domains/main.tf`. Then create the workspaces
-   `fabric-mesh-governance` and `fabric-mesh-domains`, both with execution mode **Local**.
+   `fabric-mesh-governance`, `fabric-mesh-domains` (prod) and `fabric-mesh-domains-dev`, all with execution mode
+   **Local**. Tag both domains workspaces `fabric-mesh-domains`, and share the governance state with them.
 2. Create the CI identity: an Entra app and service principal with GitHub OIDC federated credentials (pull requests,
    `main` and the `platform` environment). Its object ID is a Terraform input from the first apply on.
 3. Create the labels and label policy: `pwsh tools/purview/labels.ps1 -UserPrincipalName <admin upn>`. This applies
@@ -326,16 +336,16 @@ Terraform organization, and the medallion platform from the
 5. Copy each stack's `local.auto.tfvars.example` to `local.auto.tfvars` (gitignored) and fill it in:
    - `governance`: `admin_user_object_id` and `ci_service_principal_object_id`;
    - `domains`: `capacity_id`.
-6. Apply `infra/terraform/governance`, then `infra/terraform/domains`.
-7. Apply the rest: `uv run onelake-roles --apply`, `uv run domain-contributors --apply` and
-   `uv run data-product-governance --apply`. Set endorsement in the portal.
+6. Apply `infra/terraform/governance`, then `infra/terraform/domains` per environment: `make apply ENV=dev`, then
+   `make apply ENV=prod` (each applies governance, the domains stack in that environment, and the tools).
+7. Set endorsement in the portal (prod only).
 8. For CI:
    - set the repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `FABRIC_CAPACITY_ID`,
      `FABRIC_ADMIN_USER_OBJECT_ID`, `FABRIC_SP_OBJECT_ID` and `SENSITIVITY_LABEL_IDS`, and the `TF_API_TOKEN` secret;
    - create the `platform` environment and add **required reviewers** to it. Without that protection rule, applies
      run without waiting for approval.
 
-Once bootstrapped (steps 1–5), `make apply` runs steps 6–7 in CI's order, and `make check` runs ruff, pytest,
+Once bootstrapped (steps 1–5), `make apply ENV=<dev|prod>` runs step 6 in CI's order, and `make check` runs ruff, pytest,
 Terraform fmt/validate/tflint and every tool's dry run (`make help` lists the targets).
 
 Progress is in [docs/PLAN.md](docs/PLAN.md). Working conventions are in [CLAUDE.md](CLAUDE.md).
@@ -351,6 +361,7 @@ Progress is in [docs/PLAN.md](docs/PLAN.md). Working conventions are in [CLAUDE.
   - [0004](docs/adr/0004-pr-plan-identity.md) PR plans run with the deployment identity (accepted risk)
   - [0005](docs/adr/0005-plan-file-in-git-history.md) a removed plan file stays in git history (accepted)
   - [0006](docs/adr/0006-data-contracts-odcs.md) data contracts in ODCS v3.1, checked against the live tables
+  - [0007](docs/adr/0007-dev-prod-environments.md) dev → prod environments for the domains stack
 
 ## 🏅 Author & Certifications
 

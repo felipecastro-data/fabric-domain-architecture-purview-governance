@@ -1,7 +1,7 @@
 """Workspace domain assignments, checked: every data product workspace sits in the domain Terraform assigned it to,
-and no unmanaged workspace uses the data product name prefix.
+and no unmanaged workspace matches the environment's data product name pattern.
 
-    uv run workspace-domains   # check only; exits 1 on drift
+    MESH_ENV=prod uv run workspace-domains   # check only; exits 1 on drift (MESH_ENV: dev | prod, default prod)
 
 Terraform (fabric_domain_workspace_assignments) makes the assignments. Tenant and domain admins may reassign
 workspaces in the portal, and new workspaces may be created outside Terraform, so CI checks the live state.
@@ -10,6 +10,7 @@ workspaces in the portal, and new workspaces may be created outside Terraform, s
 from __future__ import annotations
 
 import argparse
+import re
 import urllib.parse
 
 from fabric_mesh_tools import terraform
@@ -18,15 +19,15 @@ from fabric_mesh_tools.api import FABRIC, request
 API = f"{FABRIC}/admin/workspaces"
 
 
-def diff_assignments(desired: dict[str, dict], prefix: str, live: dict[str, dict]) -> list[tuple[str, str]]:
-    """[(status, message)] per managed workspace and per unmanaged workspace that uses the prefix."""
+def diff_assignments(desired: dict[str, dict], pattern: str, live: dict[str, dict]) -> list[tuple[str, str]]:
+    """[(status, message)] per managed workspace and per unmanaged workspace whose name matches `pattern`."""
     managed = {w["workspace_id"] for w in desired.values()}
     lines = []
     for key, w in sorted(desired.items()):
         current = live.get(w["workspace_id"], {}).get("domainId")
         lines.append(("ok" if current == w["domain_id"] else "DRIFT", f"{key:<10} {current} -> {w['domain_id']}"))
     for ws_id, w in sorted(live.items(), key=lambda kv: kv[1]["name"]):
-        if w["name"].startswith(prefix) and ws_id not in managed:
+        if re.fullmatch(pattern, w["name"]) and ws_id not in managed:
             lines.append(("DRIFT", f"unmanaged workspace {w['name']} ({ws_id}), domain {w.get('domainId')}"))
     return lines
 
@@ -45,7 +46,7 @@ def main(argv: list[str] | None = None) -> None:
     argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args(argv)
     lines = diff_assignments(
         terraform.output(terraform.DOMAINS_STACK, "workspaces"),
-        terraform.output(terraform.DOMAINS_STACK, "workspace_prefix"),
+        terraform.output(terraform.DOMAINS_STACK, "workspace_name_pattern"),
         active_workspaces(),
     )
     for status, message in lines:

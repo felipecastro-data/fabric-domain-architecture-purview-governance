@@ -9,18 +9,12 @@ variable "capacity_id" {
   type        = string
 }
 
-variable "source_workspace_name" {
-  description = "Upstream workspace whose Delta tables the producer domains expose (the medallion platform's prod workspace)."
-  type        = string
-  default     = "divvy-medallion-prod"
-}
-
 variable "data_products" {
   description = <<-EOT
     One data product lakehouse per domain (key = domain key from the governance stack).
     Each shortcut maps a table name to its source: `from` is "source:<lakehouse>" for the upstream medallion workspace,
     or another domain key for a cross-domain shortcut. `label` (default: the domain's default label), `tags` and
-    `endorsement` (Promoted | Certified) are applied to the lakehouse by src/fabric_mesh_tools/data_product_governance.py.
+    `endorsement` (Promoted | Certified, prod only) are applied to the lakehouse by src/fabric_mesh_tools/data_product_governance.py.
   EOT
   type = map(object({
     lakehouse   = string

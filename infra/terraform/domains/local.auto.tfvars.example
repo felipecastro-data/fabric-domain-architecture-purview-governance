@@ -3,3 +3,5 @@
 # Fabric capacity that hosts the mesh workspaces
 # (az rest --resource https://api.fabric.microsoft.com --url https://api.fabric.microsoft.com/v1/capacities)
 capacity_id = ""
+
+# The environment is not set here: `make plan ENV=dev` (or TF_VAR_environment + TF_WORKSPACE) selects it.

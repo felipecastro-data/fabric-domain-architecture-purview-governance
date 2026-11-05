@@ -1,12 +1,14 @@
 terraform {
   required_version = ">= 1.11, < 2.0"
 
-  # Remote state in HCP Terraform (execution mode: Local — plans/applies run in GitHub Actions)
+  # Remote state in HCP Terraform (execution mode: Local — plans/applies run in GitHub Actions).
+  # One HCP workspace per environment, selected with TF_WORKSPACE:
+  #   prod -> fabric-mesh-domains, dev -> fabric-mesh-domains-dev (see environment.tf)
   cloud {
     organization = "felipecastro-data"
 
     workspaces {
-      name = "fabric-mesh-domains"
+      tags = ["fabric-mesh-domains"]
     }
   }
 

@@ -1,9 +1,16 @@
 # One-command local workflow. `make check` runs what the `ci` gate runs plus every tool's dry run (live, read-only).
+# ENV=dev|prod (default prod) selects the domains environment: `make plan ENV=dev`, `make apply ENV=dev`.
 # Needs uv, terraform, tflint and az login (Fabric administrator); see README "Run it yourself".
 .DEFAULT_GOAL := help
 UV ?= uv
 TF ?= terraform
 STACKS := governance domains
+ENV ?= prod
+DOMAINS_WORKSPACE := $(if $(filter prod,$(ENV)),fabric-mesh-domains,fabric-mesh-domains-$(ENV))
+# Domains commands run in the HCP workspace of $(ENV); the tools pick it from MESH_ENV
+DOMAINS_TF := TF_WORKSPACE=$(DOMAINS_WORKSPACE) TF_VAR_environment=$(ENV) $(TF) -chdir=infra/terraform/domains
+export MESH_ENV := $(ENV)
+TENANT_TOOLS := tenant-settings domain-contributors
 TOOLS := workspace-domains tenant-settings domain-contributors onelake-roles data-product-governance data-contracts
 # Import the package from the tree, not through the editable install's .pth file: macOS can flag that file hidden
 # (iCloud-synced folders), and Python skips hidden .pth files.
@@ -39,26 +46,29 @@ tf-check: ## terraform fmt, validate and tflint for both stacks (no backend)
 	  else echo "tflint not installed: skipped (CI runs it)"; fi; \
 	done
 
-dry-run: setup ## Every tool as a dry run against the live tenant (exits 1 on drift)
-	@for s in $(STACKS); do $(TF) -chdir=infra/terraform/$$s init -input=false >/dev/null || exit 1; done
+dry-run: setup ## Every tool as a dry run against the live tenant, in ENV (exits 1 on drift)
+	@$(TF) -chdir=infra/terraform/governance init -input=false >/dev/null
+	@$(DOMAINS_TF) init -input=false >/dev/null
 	@for t in $(TOOLS); do echo "== $$t"; $(UV) run $$t || exit 1; done
 
 freshness: setup ## Each data contract's latency SLA (newest Delta write per product)
-	@$(TF) -chdir=infra/terraform/domains init -input=false >/dev/null
+	@$(DOMAINS_TF) init -input=false >/dev/null
 	$(UV) run data-freshness
 
 check: test tf-check dry-run ## Everything: lint, tests, Terraform static checks, live dry runs
 
-plan: ## terraform plan for both stacks (governance first)
-	@for s in $(STACKS); do echo "== $$s"; $(TF) -chdir=infra/terraform/$$s init -input=false >/dev/null && $(TF) -chdir=infra/terraform/$$s plan -lock-timeout=5m || exit 1; done
+plan: ## terraform plan: governance, then domains in ENV
+	$(TF) -chdir=infra/terraform/governance init -input=false >/dev/null
+	$(TF) -chdir=infra/terraform/governance plan -lock-timeout=5m
+	$(DOMAINS_TF) init -input=false >/dev/null
+	$(DOMAINS_TF) plan -lock-timeout=5m
 
-apply: setup ## Apply governance, then domains, then the tools (same order as CI)
+apply: setup ## Apply governance, then domains in ENV, then the tools (same order as CI)
 	$(TF) -chdir=infra/terraform/governance init -input=false
 	$(TF) -chdir=infra/terraform/governance apply -lock-timeout=5m
-	$(TF) -chdir=infra/terraform/domains init -input=false
-	$(TF) -chdir=infra/terraform/domains apply -lock-timeout=5m
-	$(UV) run tenant-settings --apply
-	$(UV) run domain-contributors --apply
+	$(DOMAINS_TF) init -input=false
+	$(DOMAINS_TF) apply -lock-timeout=5m
+	$(if $(filter prod,$(ENV)),for t in $(TENANT_TOOLS); do $(UV) run $$t --apply || exit 1; done,)
 	$(UV) run onelake-roles --apply
 	$(UV) run data-product-governance --apply
 	$(UV) run workspace-domains

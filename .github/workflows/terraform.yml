@@ -1,7 +1,10 @@
 name: terraform
 
-# PR   -> plan both stacks (one PR comment per stack); fmt / validate / tflint run in ci.yml
-# main -> apply governance, then domains, then the governance tools, gated by the `platform` environment
+# PR   -> plan governance, domains · dev and domains · prod (one PR comment each); fmt / validate / tflint run in ci.yml
+# main -> governance (tenant scope; only when its plan has changes, approval: platform)
+#         -> dev: domains · dev + its tools (no approval)
+#         -> prod: domains · prod + tenant and prod tools (approval: platform)
+# Domains select their HCP workspace (state) with TF_WORKSPACE and the environment with TF_VAR_environment / MESH_ENV.
 on:
   pull_request:
     paths:
@@ -45,17 +48,23 @@ env:
 
 jobs:
   plan:
-    name: plan · ${{ matrix.stack }}
+    name: plan · ${{ matrix.name }}
     # Fork PRs get neither the HCP token nor an OIDC token
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     concurrency: # one plan per PR and stack; a new push supersedes the running plan
-      group: terraform-plan-${{ github.event.pull_request.number }}-${{ matrix.stack }}
+      group: terraform-plan-${{ github.event.pull_request.number }}-${{ matrix.name }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        stack: [governance, domains] # domains plans against the applied governance state
+        include: # domains plan against the applied governance state
+          - { name: governance, stack: governance, environment: "", tf_workspace: "" }
+          - { name: domains · dev, stack: domains, environment: dev, tf_workspace: fabric-mesh-domains-dev }
+          - { name: domains · prod, stack: domains, environment: prod, tf_workspace: fabric-mesh-domains }
+    env:
+      TF_WORKSPACE: ${{ matrix.tf_workspace }}
+      TF_VAR_environment: ${{ matrix.environment }}
     defaults:
       run:
         working-directory: infra/terraform/${{ matrix.stack }}
@@ -77,16 +86,17 @@ jobs:
         env:
           PLAN_OUTCOME: ${{ steps.plan.outcome }}
           STACK: ${{ matrix.stack }}
+          NAME: ${{ matrix.name }}
         with:
           script: |
             const fs = require('fs');
-            const stack = process.env.STACK;
-            let plan = fs.readFileSync(`infra/terraform/${stack}/plan.txt`, 'utf8');
+            const name = process.env.NAME;
+            let plan = fs.readFileSync(`infra/terraform/${process.env.STACK}/plan.txt`, 'utf8');
             const summary = (plan.match(/^(Plan:.*|No changes\..*)$/m) || ['(see log)'])[0];
             if (plan.length > 60000) plan = '...(truncated)...\n' + plan.slice(-60000);
-            const marker = `<!-- terraform-plan-${stack} -->`;
+            const marker = `<!-- terraform-plan-${name.replace(/[^a-z]+/g, '-')} -->`;
             const body = `${marker}
-            ### Terraform plan · \`${stack}\` — \`${process.env.PLAN_OUTCOME}\`
+            ### Terraform plan · \`${name}\` — \`${process.env.PLAN_OUTCOME}\`
             **${summary}**
             <details><summary>Show plan</summary>
 
@@ -102,14 +112,102 @@ jobs:
               await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
             }
 
-  apply:
-    name: apply
+  governance-plan:
+    name: governance · plan
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+    defaults:
+      run:
+        working-directory: infra/terraform/governance
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - run: terraform init
+      - name: terraform plan (detailed exit code)
+        id: plan
+        run: |
+          set +e
+          terraform plan -no-color -lock-timeout=5m -detailed-exitcode
+          code=$?
+          [ "$code" = 1 ] && exit 1
+          echo "changes=$([ "$code" = 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  governance:
+    name: apply · governance
+    needs: governance-plan
+    if: needs.governance-plan.outputs.changes == 'true' # tenant-scope changes get their own approval
     runs-on: ubuntu-latest
     environment: platform # requires manual approval
     concurrency: # deployments never share a group with PR plans, so a plan cannot cancel a pending apply
-      group: terraform-apply
+      group: terraform-apply-governance
       cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - name: apply · governance
+        working-directory: infra/terraform/governance
+        run: |
+          terraform init
+          terraform plan -no-color -lock-timeout=5m -out=tfplan
+          terraform apply -no-color -lock-timeout=5m tfplan
+
+  dev:
+    name: apply · dev
+    needs: [governance-plan, governance]
+    if: ${{ !cancelled() && needs.governance-plan.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.governance.result) }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: terraform-apply-dev
+      cancel-in-progress: false
+    env:
+      TF_WORKSPACE: fabric-mesh-domains-dev
+      TF_VAR_environment: dev
+      MESH_ENV: dev
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - uses: astral-sh/setup-uv@v10.3.1
+      - run: uv sync --locked --extra onelake
+      - name: apply · domains · dev
+        working-directory: infra/terraform/domains
+        run: |
+          terraform init
+          terraform plan -no-color -lock-timeout=5m -out=tfplan
+          terraform apply -no-color -lock-timeout=5m tfplan
+      # Domain-scope tools only; tenant settings and domain contributors are applied once, in prod
+      - name: tools · OneLake roles
+        run: uv run --locked onelake-roles --apply
+      - name: tools · labels, tags (endorsement is not checked in dev)
+        run: uv run --locked data-product-governance --apply
+      - name: check · workspace domains
+        run: uv run --locked workspace-domains
+      - name: check · data contracts
+        run: uv run --locked data-contracts
+
+  prod:
+    name: apply · prod
+    needs: dev
+    if: ${{ !cancelled() && needs.dev.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: platform # requires manual approval
+    concurrency:
+      group: terraform-apply-prod
+      cancel-in-progress: false
+    env:
+      TF_WORKSPACE: fabric-mesh-domains
+      TF_VAR_environment: prod
+      MESH_ENV: prod
     steps:
       - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
@@ -118,18 +216,14 @@ jobs:
           terraform_wrapper: false
       - uses: astral-sh/setup-uv@v10.3.1
       - run: uv sync --locked
-      - name: apply · governance
-        working-directory: infra/terraform/governance
-        run: |
-          terraform init
-          terraform plan -no-color -lock-timeout=5m -out=tfplan
-          terraform apply -no-color -lock-timeout=5m tfplan
-      - name: apply · domains
+      - name: apply · domains · prod
         working-directory: infra/terraform/domains
         run: |
           terraform init
           terraform plan -no-color -lock-timeout=5m -out=tfplan
           terraform apply -no-color -lock-timeout=5m tfplan
+      - name: terraform init · governance (tools read its outputs)
+        run: env -u TF_WORKSPACE terraform -chdir=infra/terraform/governance init
       # Settings the provider cannot manage. Labels and endorsement are checked only (no service principal API).
       - name: tools · tenant settings
         run: uv run --locked tenant-settings --apply
