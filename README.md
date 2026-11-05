@@ -176,8 +176,8 @@ flowchart LR
     Main --> GP{"governance<br/>plan has changes?"}
     GP -->|"yes · approval: platform"| G["apply governance<br/>(tenant scope)"]
     GP -->|no| Dev
-    G --> Dev["apply · dev<br/>mesh-*-dev on divvy-medallion-dev<br/>roles · labels · contracts checked"]
-    Dev -->|"approval: platform"| Prod["apply · prod<br/>mesh-* on divvy-medallion-prod<br/>tenant settings · contributors · roles · labels"]
+    G --> Dev["apply · dev<br/>mesh-*-dev on divvy-medallion-dev<br/>roles · labels · contracts checked<br/>semantic model framed"]
+    Dev -->|"approval: platform"| Prod["apply · prod<br/>mesh-* on divvy-medallion-prod<br/>tenant settings · contributors · roles · labels<br/>semantic model framed"]
     Prod --> C["compliance (prod, required) · compliance · dev<br/>after every apply + daily 06:00 UTC"]
     Prod --> F["data freshness (alert)<br/>8-day latency SLA"]
 ```
@@ -247,7 +247,7 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 | **Least privilege, proven live** | A license-free test consumer read 3 tables through 2 shortcut hops and was denied `fact_trips`. |
 | **Drift caught daily** | 5 checks compare the live tenant with Terraform after every apply and at 06:00 UTC: workspace domains, tenant settings, contributor scope, OneLake roles, labels, tags and endorsement. |
 | **Promotion without risk** | Adding environments planned **0 changes in prod**. Dev runs the same 32 resources against `divvy-medallion-dev` (1.6M trips) and must pass its contracts before prod can be approved. |
-| **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then 5 tools, all reporting a match. |
+| **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then the 5 tools, all reporting a match. Dev also checks its data contracts, and both environments frame the semantic model. |
 | **Fast feedback** | A no-change apply takes **9 s** (governance) and **14 s** (domains), plus **15 s** for the 5 tools. The daily compliance run takes **30–50 s**. |
 | **Hops are free** | Reading all 6,006,901 rows of `fact_trips` took **13.0 s through 2 shortcut hops and 13.0 s from `lh_gold` directly** (median of 3). Zero-copy costs nothing at read time. |
 | **A product that answers** | `sm_demand_weather` reads Delta through 2 shortcut hops with no import. CI frames it in **11 s** after every apply; run as a user, the DAX check over all 6.0M prod trips took **3.5 s** (24.5 s on a slower run; 1.6–1.8 s in dev). In prod (366 days), wet days averaged **15,355 trips** against **17,060** on dry days: **10.0 % lower demand** (dev, 62 days: 17.2 %). Members took **65 %** of trips. |
@@ -345,6 +345,13 @@ Terraform organization, and the medallion platform from the
    - `domains`: `capacity_id`.
 6. Apply `infra/terraform/governance`, then `infra/terraform/domains` per environment: `make apply ENV=dev`, then
    `make apply ENV=prod` (each applies governance, the domains stack in that environment, and the tools).
+   - Run the first dev apply yourself: it grants the CI service principal Member on `divvy-medallion-dev`, which it
+     can't see before (the data source lists workspaces with user scope). The same goes for dev labels:
+     `bulkSetLabels` rejects service principals.
+   - New workspaces can fail CI plans with `InsufficientPrivileges` for a few minutes, until Fabric picks up the
+     owners groups' Admin roles. Re-run the job.
+   - Run `uv run semantic-model` as a user to see the DAX values: `executeQueries` rejects service principals on
+     Direct Lake on OneLake models, so CI only checks the framing.
 7. Set endorsement in the portal (prod only).
 8. For CI:
    - set the repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `FABRIC_CAPACITY_ID`,
