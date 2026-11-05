@@ -34,6 +34,21 @@ weather-expected demand), average duration and member share.
 `semantic-model --refresh` frames the model after each apply, then runs a DAX query through the Power BI
 `executeQueries` API and fails if any measure is blank. Compliance runs the query daily.
 
+## Measured (dev, 2026-11-05)
+
+| | |
+|---|---|
+| Framing | 18 s |
+| DAX check (all measures) | 1.8 s |
+| Trips · days | 1,597,858 · 62 |
+| Trips per dry day · wet day | 28,025 · 23,208 |
+| Wet-day demand change | −17.2 % |
+| Member share | 61.2 % |
+
+Deploying it surfaced two TMDL rules the provider doesn't check at plan time: descriptions are `///` comments, not a
+`description:` property, and a measure can't share a name with any column (case-insensitive), so the hidden `trips`
+column is `trip_count`.
+
 ## Consequences
 
 - The consumer domain now has a transform and a serving endpoint with zero bytes copied.
