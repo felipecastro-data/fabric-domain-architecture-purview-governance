@@ -202,7 +202,7 @@ jobs:
         run: uv run --locked workspace-domains
       - name: check · data contracts
         run: uv run --locked data-contracts
-      - name: serve · frame and query the Analytics semantic model
+      - name: serve · frame the Analytics semantic model
         run: uv run --locked semantic-model --refresh
 
   prod:
@@ -245,5 +245,5 @@ jobs:
         run: uv run --locked data-product-governance --apply
       - name: check · workspace domains
         run: uv run --locked workspace-domains
-      - name: serve · frame and query the Analytics semantic model
+      - name: serve · frame the Analytics semantic model
         run: uv run --locked semantic-model --refresh

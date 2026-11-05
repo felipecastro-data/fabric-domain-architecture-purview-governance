@@ -6,6 +6,10 @@
 Framing (a "Full" refresh) points a Direct Lake model at the latest Delta versions; no data is imported. The check
 then runs a DAX query through the Power BI executeQueries API, the same endpoint reports and DAX clients use, so a
 passing run proves the model is reachable and computes its measures through the shortcut chain.
+
+executeQueries rejects service principals on SSO models, and Direct Lake on OneLake always queries as the caller.
+In CI (the service principal) the check is the latest framing instead: it must be Completed, which proves the model
+binds to the current Delta schemas through the shortcut chain. Run it as a user for the DAX values.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ import time
 
 from fabric_mesh_tools import terraform
 from fabric_mesh_tools.api import POWERBI_SCOPE, request
+from fabric_mesh_tools.fabric_auth import in_github_actions
 
 POWERBI = "https://api.powerbi.com/v1.0/myorg"
 MEASURES = [
@@ -46,12 +51,21 @@ def problems(values: dict[str, float | None]) -> list[str]:
     return found
 
 
+def refreshes_url(workspace_id: str, model_id: str) -> str:
+    return f"{POWERBI}/groups/{workspace_id}/datasets/{model_id}/refreshes"
+
+
+def last_framing(workspace_id: str, model_id: str) -> str:
+    """Status of the latest refresh: Completed, Failed, Disabled, Unknown (in progress) or Never."""
+    history = request("GET", f"{refreshes_url(workspace_id, model_id)}?$top=1", scope=POWERBI_SCOPE)["value"]
+    return history[0]["status"] if history else "Never"
+
+
 def refresh(workspace_id: str, model_id: str, timeout_s: int = 600) -> str:
-    base = f"{POWERBI}/groups/{workspace_id}/datasets/{model_id}/refreshes"
-    request("POST", base, {"type": "Full"}, POWERBI_SCOPE)
+    request("POST", refreshes_url(workspace_id, model_id), {"type": "Full"}, POWERBI_SCOPE)
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        status = request("GET", f"{base}?$top=1", scope=POWERBI_SCOPE)["value"][0]["status"]
+        status = last_framing(workspace_id, model_id)
         if status != "Unknown":  # Unknown = in progress
             return status
         time.sleep(5)
@@ -72,6 +86,14 @@ def main(argv: list[str] | None = None) -> None:
             if status != "Completed":
                 failures += 1
                 continue
+        if in_github_actions():  # service principal: executeQueries is not available, check the framing
+            status = last_framing(m["workspace_id"], m["id"])
+            failures += status != "Completed"
+            print(
+                f"{domain:<10} {m['name']}: {'ok' if status == 'Completed' else 'FAIL'} (last framing {status}; "
+                "DAX values need a user identity)"
+            )
+            continue
         started = time.time()
         result = request(
             "POST",
