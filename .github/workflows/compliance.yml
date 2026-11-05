@@ -38,9 +38,10 @@ jobs:
         with:
           terraform_version: "~1.16"
           terraform_wrapper: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6 # TRANSITION: only for base commits from before the package; remove next PR
         with:
           python-version: "3.12"
+      - uses: astral-sh/setup-uv@v10.3.1
       - name: terraform init
         run: |
           terraform -chdir=infra/terraform/governance init
@@ -48,16 +49,16 @@ jobs:
       # if: !cancelled() runs every check, so one failure does not hide another
       - name: workspace domains
         if: ${{ !cancelled() }}
-        run: python tools/workspace_domains.py
+        run: if [ -f pyproject.toml ]; then uv run --locked workspace-domains; else python tools/workspace_domains.py; fi
       - name: tenant settings
         if: ${{ !cancelled() }}
-        run: python tools/tenant_settings.py
+        run: if [ -f pyproject.toml ]; then uv run --locked tenant-settings; else python tools/tenant_settings.py; fi
       - name: domain contributors
         if: ${{ !cancelled() }}
-        run: python tools/domain_contributors.py
+        run: if [ -f pyproject.toml ]; then uv run --locked domain-contributors; else python tools/domain_contributors.py; fi
       - name: OneLake roles
         if: ${{ !cancelled() }}
-        run: python tools/onelake_roles.py
+        run: if [ -f pyproject.toml ]; then uv run --locked onelake-roles; else python tools/onelake_roles.py; fi
       - name: labels, tags, endorsement
         if: ${{ !cancelled() }}
-        run: python tools/data_product_governance.py
+        run: if [ -f pyproject.toml ]; then uv run --locked data-product-governance; else python tools/data_product_governance.py; fi

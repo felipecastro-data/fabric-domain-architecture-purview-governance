@@ -1,0 +1,45 @@
+{
+  "mobility.CrossDomainRead": {
+    "workspace_id": "ws-mobility",
+    "item_id": "lh-mobility",
+    "role": {
+      "name": "CrossDomainRead",
+      "decisionRules": [{"effect": "Permit", "permission": [
+        {"attributeName": "Action", "attributeValueIncludedIn": ["Read"]},
+        {"attributeName": "Path", "attributeValueIncludedIn": ["*"]}
+      ]}],
+      "members": {"microsoftEntraMembers": [
+        {"objectId": "g-analytics-consumers", "objectType": "Group", "tenantId": "t"},
+        {"objectId": "g-analytics-engineers", "objectType": "Group", "tenantId": "t"}
+      ]}
+    }
+  },
+  "source:lh_gold.MeshAggregates": {
+    "workspace_id": "ws-source",
+    "item_id": "lh-gold",
+    "role": {
+      "name": "MeshAggregates",
+      "decisionRules": [{"effect": "Permit", "permission": [
+        {"attributeName": "Action", "attributeValueIncludedIn": ["Read"]},
+        {"attributeName": "Path", "attributeValueIncludedIn": ["/Tables/dbo/dim_station", "/Tables/dbo/agg_daily_kpis"]}
+      ]}],
+      "members": {"microsoftEntraMembers": [
+        {"objectId": "g-mobility-consumers", "objectType": "Group", "tenantId": "t"}
+      ]}
+    }
+  },
+  "source:lh_gold.MeshRideLevel": {
+    "workspace_id": "ws-source",
+    "item_id": "lh-gold",
+    "role": {
+      "name": "MeshRideLevel",
+      "decisionRules": [{"effect": "Permit", "permission": [
+        {"attributeName": "Action", "attributeValueIncludedIn": ["Read"]},
+        {"attributeName": "Path", "attributeValueIncludedIn": ["/Tables/dbo/fact_trips"]}
+      ]}],
+      "members": {"microsoftEntraMembers": [
+        {"objectId": "g-mobility-engineers", "objectType": "Group", "tenantId": "t"}
+      ]}
+    }
+  }
+}

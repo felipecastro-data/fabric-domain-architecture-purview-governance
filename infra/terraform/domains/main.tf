@@ -30,7 +30,7 @@ data "fabric_workspace" "source" {
   display_name = var.source_workspace_name
 }
 
-# The CI service principal manages the OneLake roles on the source lakehouses (tools/onelake_roles.py),
+# The CI service principal manages the OneLake roles on the source lakehouses (src/fabric_mesh_tools/onelake_roles.py),
 # which needs Member on the source workspace.
 resource "fabric_workspace_role_assignment" "source_ci" {
   workspace_id = data.fabric_workspace.source.id

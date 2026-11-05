@@ -69,7 +69,7 @@ flowchart LR
     end
     HCP[("HCP Terraform<br/>remote state")]
     GOV -- outputs --> HCP -- terraform_remote_state --> DOM
-    DOM -- "terraform output" --> T["tools/*.py<br/>roles · labels · endorsement check"]
+    DOM -- "terraform output" --> T["fabric_mesh_tools<br/>roles · labels · endorsement check"]
 ```
 
 The central stack is applied first. Domain teams consume its outputs (domain IDs, group IDs, label IDs, tag IDs) and
@@ -153,13 +153,13 @@ Analytics lakehouse over OneLake. Each read went through `lh_analytics` → prod
 
 Analytics engineers hold a role at every hop and read all 6,006,901 rows of `fact_trips`. Membership of an owners
 group alone does not: workspace Admin applies only in the domain's own workspace, not at upstream hops.
-[`tools/read_onelake.py`](tools/read_onelake.py) reproduces the test.
+[`read_onelake.py`](src/fabric_mesh_tools/read_onelake.py) reproduces the test.
 
 ## Delivery
 
 ```mermaid
 flowchart LR
-    PR["Pull request"] -->|"ci: fmt · validate · tflint<br/>terraform: plan comment per stack<br/>compliance: live state vs deployed policy"| Main["main (protected)"]
+    PR["Pull request"] -->|"ci: fmt · validate · tflint · ruff · pytest<br/>terraform: plan comment per stack<br/>compliance: live state vs deployed policy"| Main["main (protected)"]
     Main -->|"approval: platform"| Apply["apply governance → domains<br/>then tools: tenant settings · contributors<br/>OneLake roles · tags · label/endorsement check"]
     Apply --> C["compliance<br/>after every apply + daily 06:00 UTC"]
 ```
@@ -187,10 +187,10 @@ flowchart LR
 |---|---|---|
 | Groups, domains, domain roles, default labels, tags | Terraform `governance` | `azuread_group`, `fabric_domain`, `fabric_domain_role_assignments`, `fabric_tag` |
 | Workspaces, lakehouses, workspace roles, domain assignment, shortcuts, item tags | Terraform `domains` | `fabric_workspace`, `fabric_lakehouse`, `fabric_domain_workspace_assignments`, `fabric_shortcut` |
-| OneLake security roles | Terraform role map → [`onelake_roles.py`](tools/onelake_roles.py) | Single-role upsert. The provider resource fails on Entra members ([#1044](https://github.com/microsoft/terraform-provider-fabric/issues/1044)). |
-| Sensitivity labels on existing items | Terraform → [`data_product_governance.py`](tools/data_product_governance.py) | `bulkSetLabels` (user-only API, so CI only checks labels) |
-| Domain contributor scope | [`domain_contributors.py`](tools/domain_contributors.py) | Admin API (`contributorsScope` is preview-only) |
-| Tenant settings (labels, endorsement, domains) | [`tenant_settings.py`](tools/tenant_settings.py) | Admin API |
+| OneLake security roles | Terraform role map → [`onelake_roles.py`](src/fabric_mesh_tools/onelake_roles.py) | Single-role upsert. The provider resource fails on Entra members ([#1044](https://github.com/microsoft/terraform-provider-fabric/issues/1044)). |
+| Sensitivity labels on existing items | Terraform → [`data_product_governance.py`](src/fabric_mesh_tools/data_product_governance.py) | `bulkSetLabels` (user-only API, so CI only checks labels) |
+| Domain contributor scope | [`domain_contributors.py`](src/fabric_mesh_tools/domain_contributors.py) | Admin API (`contributorsScope` is preview-only) |
+| Tenant settings (labels, endorsement, domains) | [`tenant_settings.py`](src/fabric_mesh_tools/tenant_settings.py) | Admin API |
 | Purview labels and label policy | [`purview/labels.ps1`](tools/purview/labels.ps1) | Security & Compliance PowerShell |
 | **Endorsement** | **Portal** (no write API exists) | Set once in item settings. Terraform declares it, and the compliance check fails while it differs. |
 
@@ -238,7 +238,7 @@ shortcuts need a role at every hop. Access to the data is granted on purpose, ne
 A copy-based mesh would store `fact_trips` twice more (once per domain that exposes it) and keep both copies in sync.
 Shortcuts store nothing: the mesh adds governance, not storage or pipelines.
 
-Both charts come from [`tools/mesh_charts.py`](tools/mesh_charts.py). It computes access from the Terraform outputs
+Both charts come from [`mesh_charts.py`](src/fabric_mesh_tools/mesh_charts.py). It computes access from the Terraform outputs
 and reads table sizes from OneLake.
 
 ## Screenshots
@@ -282,7 +282,7 @@ fails. The Mobility screenshot above shows the result.
 | Governance | Microsoft Purview Information Protection (sensitivity labels), Fabric endorsement, tags, lineage, scanner API |
 | Identity | Microsoft Entra ID groups, service principal with GitHub OIDC federated credentials |
 | Infrastructure as code | Terraform `microsoft/fabric` + `hashicorp/azuread`, HCP Terraform remote state, tflint |
-| Automation | Python 3 (standard library only) on the Fabric REST and Admin APIs, PowerShell for Purview labels |
+| Automation | Python 3.12 package (standard library only) on the Fabric REST and Admin APIs, uv, ruff, pytest; PowerShell for Purview labels |
 | CI/CD | GitHub Actions, environments with required reviewers, protected `main`, scheduled compliance |
 
 ## Repository layout
@@ -290,8 +290,10 @@ fails. The Mobility screenshot above shows the result.
 ```
 infra/terraform/governance/   tenant scope: Entra groups · domains · domain roles · default labels · tags
 infra/terraform/domains/      workspaces · data product lakehouses · roles · shortcuts · OneLake role map · governance outputs
-tools/                        idempotent tools for what the provider can't manage (+ OneLake reader, README charts)
+src/fabric_mesh_tools/        Python package: idempotent tools for what the provider can't manage (+ OneLake reader, README charts)
+tests/                        pytest on fixture JSON (no network): role diffing, change detection, access through hops
 tools/purview/                Purview sensitivity labels and label policy (PowerShell)
+Makefile                      make check · plan · apply
 docs/                         design (scalability · cost · governance · security), ADRs, plan, charts, screenshots
 .github/workflows/            ci (fmt · validate · tflint) · terraform (plan / apply) · compliance (drift check)
 ```
@@ -309,18 +311,21 @@ Terraform organization, and the medallion platform from the
    `main` and the `platform` environment). Its object ID is a Terraform input from the first apply on.
 3. Create the labels and label policy: `pwsh tools/purview/labels.ps1 -UserPrincipalName <admin upn>`. This applies
    them immediately and writes the label IDs to `labels.auto.tfvars.json`.
-4. Enable the tenant settings: `python tools/tenant_settings.py --apply`.
+4. Enable the tenant settings: `uv run tenant-settings --apply` (needs [uv](https://docs.astral.sh/uv/)).
 5. Copy each stack's `local.auto.tfvars.example` to `local.auto.tfvars` (gitignored) and fill it in:
    - `governance`: `admin_user_object_id` and `ci_service_principal_object_id`;
    - `domains`: `capacity_id`.
 6. Apply `infra/terraform/governance`, then `infra/terraform/domains`.
-7. Apply the rest: `onelake_roles.py --apply`, `domain_contributors.py --apply` and
-   `data_product_governance.py --apply`. Set endorsement in the portal.
+7. Apply the rest: `uv run onelake-roles --apply`, `uv run domain-contributors --apply` and
+   `uv run data-product-governance --apply`. Set endorsement in the portal.
 8. For CI:
    - set the repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `FABRIC_CAPACITY_ID`,
      `FABRIC_ADMIN_USER_OBJECT_ID`, `FABRIC_SP_OBJECT_ID` and `SENSITIVITY_LABEL_IDS`, and the `TF_API_TOKEN` secret;
    - create the `platform` environment and add **required reviewers** to it. Without that protection rule, applies
      run without waiting for approval.
+
+Once bootstrapped (steps 1–5), `make apply` runs steps 6–7 in CI's order, and `make check` runs ruff, pytest,
+Terraform fmt/validate/tflint and every tool's dry run (`make help` lists the targets).
 
 Progress is in [docs/PLAN.md](docs/PLAN.md). Working conventions are in [CLAUDE.md](CLAUDE.md).
 

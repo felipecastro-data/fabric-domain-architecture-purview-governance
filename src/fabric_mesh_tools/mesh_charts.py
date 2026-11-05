@@ -1,7 +1,6 @@
 """Render the README charts: effective table access per group, and the data the shortcuts serve in place.
 
-    uv run --no-project --with deltalake --with pyarrow --with matplotlib \\
-        python tools/mesh_charts.py --out docs/charts
+    uv run --extra onelake --extra charts mesh-charts --out docs/charts
 
 Access comes from Terraform outputs (shortcuts, OneLake roles, groups). Shortcuts are passthrough, so a group reads a
 table only with a role at every hop: its own domain's lakehouse (workspace role, built-in DefaultReader), then
@@ -14,34 +13,24 @@ Palette: the dataviz reference instance (status good/critical with icon + label,
 from __future__ import annotations
 
 import argparse
-import json
-import subprocess
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import pyarrow as pa  # noqa: E402
-from matplotlib.patches import FancyBboxPatch  # noqa: E402
-from read_onelake import open_table  # noqa: E402
-
-ROOT = Path(__file__).resolve().parents[1]
-DOMAINS_STACK = ROOT / "infra" / "terraform" / "domains"
-GOVERNANCE_STACK = ROOT / "infra" / "terraform" / "governance"
+from fabric_mesh_tools import terraform
+from fabric_mesh_tools.read_onelake import open_table
 
 SURFACE, TEXT, TEXT_2, MUTED, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#a3a29c", "#e4e3df"
 GOOD, CRITICAL, BAR = "#0ca30c", "#d03b3b", "#2a78d6"
 DOMAINS = ["mobility", "weather", "analytics"]
 KINDS = ["owners", "engineers", "consumers"]
-TABLES = ["fact_trips", "dim_station", "dim_date", "agg_daily_kpis", "agg_station_monthly", "dim_weather", "weather_daily"]
-
-
-def tf_output(stack: Path, name: str):
-    out = subprocess.run(
-        ["terraform", f"-chdir={stack}", "output", "-json", name], check=True, capture_output=True, text=True
-    ).stdout
-    return json.loads(out)
+TABLES = [
+    "fact_trips",
+    "dim_station",
+    "dim_date",
+    "agg_daily_kpis",
+    "agg_station_monthly",
+    "dim_weather",
+    "weather_daily",
+]
 
 
 def role_grants(roles: dict, groups: dict) -> dict[str, list[tuple[set[str], str]]]:
@@ -84,9 +73,16 @@ def _title(fig, title: str, subtitle: str, y: float = 0.965) -> None:
 
 
 def access_matrix(shortcuts: dict, grants: dict, out: Path) -> None:
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import FancyBboxPatch
+
     fig, ax = plt.subplots(figsize=(11, 6.4), dpi=150)
-    _title(fig, "Who can read which table", "Effective OneLake access through each group's own data product · "
-           "computed from Terraform: a role is needed at every shortcut hop")
+    _title(
+        fig,
+        "Who can read which table",
+        "Effective OneLake access through each group's own data product · "
+        "computed from Terraform: a role is needed at every shortcut hop",
+    )
     ax.set_facecolor(SURFACE)
     ax.set_xlim(-0.5, len(TABLES) - 0.5)
     rows = [(d, k) for d in DOMAINS for k in KINDS]
@@ -97,12 +93,27 @@ def access_matrix(shortcuts: dict, grants: dict, out: Path) -> None:
                 ax.text(x, y, "·", ha="center", va="center", fontsize=12, color=MUTED)
                 continue
             ok = can_read(f"{domain}-{kind}", domain, table, shortcuts, grants)
-            ax.add_patch(FancyBboxPatch(
-                (x - 0.42, y - 0.36), 0.84, 0.72, boxstyle="round,pad=0,rounding_size=0.08",
-                facecolor=GOOD if ok else SURFACE, edgecolor=GOOD if ok else CRITICAL, linewidth=1.2,
-            ))
-            ax.text(x, y, "✓ read" if ok else "✕ denied", ha="center", va="center", fontsize=8.5,
-                    fontweight="bold", color="white" if ok else CRITICAL)
+            ax.add_patch(
+                FancyBboxPatch(
+                    (x - 0.42, y - 0.36),
+                    0.84,
+                    0.72,
+                    boxstyle="round,pad=0,rounding_size=0.08",
+                    facecolor=GOOD if ok else SURFACE,
+                    edgecolor=GOOD if ok else CRITICAL,
+                    linewidth=1.2,
+                )
+            )
+            ax.text(
+                x,
+                y,
+                "✓ read" if ok else "✕ denied",
+                ha="center",
+                va="center",
+                fontsize=8.5,
+                fontweight="bold",
+                color="white" if ok else CRITICAL,
+            )
     for y in (2.5, 5.5):
         ax.axhline(y, color=GRID, linewidth=1)
     ax.set_xticks(range(len(TABLES)), TABLES, fontsize=8.5, color=TEXT_2)
@@ -111,15 +122,26 @@ def access_matrix(shortcuts: dict, grants: dict, out: Path) -> None:
     ax.tick_params(length=0)
     for side in ax.spines.values():
         side.set_visible(False)
-    fig.text(0.012, 0.03, "·  not a data product of that domain        Owners are workspace Admins, but hold no "
-             "role upstream: admin rights don't reach across shortcuts.", fontsize=8.5, color=TEXT_2)
+    fig.text(
+        0.012,
+        0.03,
+        "·  not a data product of that domain        Owners are workspace Admins, but hold no "
+        "role upstream: admin rights don't reach across shortcuts.",
+        fontsize=8.5,
+        color=TEXT_2,
+    )
     fig.subplots_adjust(left=0.17, right=0.99, top=0.78, bottom=0.08)
     fig.savefig(out / "access-matrix.png", facecolor=SURFACE)
     plt.close(fig)
 
 
 def served_in_place(shortcuts: dict, roles: dict, out: Path) -> None:
-    sources = {k.rsplit(".", 1)[0]: (r["workspace_id"], r["item_id"]) for k, r in roles.items() if k.startswith("source:")}
+    import matplotlib.pyplot as plt
+    import pyarrow as pa
+
+    sources = {
+        k.rsplit(".", 1)[0]: (r["workspace_id"], r["item_id"]) for k, r in roles.items() if k.startswith("source:")
+    }
     stats: dict[tuple[str, str], tuple[int, int]] = {}
     for lakehouse_table in shortcuts:
         lakehouse, table = lakehouse_table.split(".", 1)
@@ -137,15 +159,20 @@ def served_in_place(shortcuts: dict, roles: dict, out: Path) -> None:
     total = sum(r[1] for r in per_lakehouse)
 
     fig, ax = plt.subplots(figsize=(11, 3.9), dpi=150)
-    _title(fig, f"{total:,.0f} MB served in place, 0 bytes copied",
-           f"Delta data a copy-based mesh would duplicate into each data product · {len(shortcuts)} OneLake "
-           "shortcuts read the prod medallion lakehouses instead", y=0.95)
+    _title(
+        fig,
+        f"{total:,.0f} MB served in place, 0 bytes copied",
+        f"Delta data a copy-based mesh would duplicate into each data product · {len(shortcuts)} OneLake "
+        "shortcuts read the prod medallion lakehouses instead",
+        y=0.95,
+    )
     ax.set_facecolor(SURFACE)
     names = [r[0] for r in per_lakehouse]
     ax.barh(names, [r[1] for r in per_lakehouse], height=0.55, color=BAR)
     for y, (_, mb, rows, n) in enumerate(per_lakehouse):
-        ax.text(mb + total * 0.008, y, f"{mb:,.1f} MB · {rows:,} rows · {n} tables", va="center", fontsize=9,
-                color=TEXT)
+        ax.text(
+            mb + total * 0.008, y, f"{mb:,.1f} MB · {rows:,} rows · {n} tables", va="center", fontsize=9, color=TEXT
+        )
     for side in ("top", "right", "left"):
         ax.spines[side].set_visible(False)
     ax.spines["bottom"].set_color(GRID)
@@ -157,14 +184,17 @@ def served_in_place(shortcuts: dict, roles: dict, out: Path) -> None:
     plt.close(fig)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--out", type=Path, default=ROOT / "docs" / "charts")
-    args = parser.parse_args()
+    parser.add_argument("--out", type=Path, default=terraform.ROOT / "docs" / "charts")
+    args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
-    shortcuts = tf_output(DOMAINS_STACK, "shortcuts")
-    roles = tf_output(DOMAINS_STACK, "onelake_access_roles")
-    grants = role_grants(roles, tf_output(GOVERNANCE_STACK, "groups"))
+    shortcuts = terraform.output(terraform.DOMAINS_STACK, "shortcuts")
+    roles = terraform.output(terraform.DOMAINS_STACK, "onelake_access_roles")
+    grants = role_grants(roles, terraform.output(terraform.GOVERNANCE_STACK, "groups"))
     access_matrix(shortcuts, grants, args.out)
     served_in_place(shortcuts, roles, args.out)
 

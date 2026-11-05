@@ -1,6 +1,7 @@
 name: ci
 
-# Static checks that need no cloud access: fmt, validate and tflint for every Terraform stack.
+# Static checks that need no cloud access: fmt, validate and tflint for every Terraform stack; ruff and pytest
+# for the Python tools.
 # plan / apply (OIDC + HCP Terraform) live in terraform.yml.
 on:
   pull_request:
@@ -38,3 +39,14 @@ jobs:
         run: |
           tflint --init
           tflint --recursive --format compact
+
+  python:
+    name: python · ruff · pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.1
+      - run: uv sync --locked --group dev
+      - run: uv run ruff check --output-format=github .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
