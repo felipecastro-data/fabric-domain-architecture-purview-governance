@@ -1,7 +1,9 @@
 name: compliance
 
-# Live governance state vs Terraform, read-only. Fails when any check finds drift:
-# workspace domains, tenant settings, domain contributors, OneLake roles, labels / tags / endorsement.
+# Live governance state vs Terraform and the data contracts, read-only. `compliance` fails when any check finds drift:
+# workspace domains, tenant settings, domain contributors, OneLake roles, labels / tags / endorsement, and each data
+# product's schema, row counts and lineage. `data freshness` checks the contracts' latency SLA in its own job, which is
+# not a required check: a stale upstream is an alert for the medallion platform, not something a mesh PR can fix.
 # PRs check live state against the *deployed* policy (base-branch code), so a PR that changes the policy is not
 # blocked by drift it will only fix once applied; the proposed policy is checked after terraform.yml applies it.
 on:
@@ -11,7 +13,7 @@ on:
     types: [completed]
     branches: [main]
   schedule:
-    - cron: "0 6 * * *" # daily: catches portal changes made outside Terraform
+    - cron: "0 6 * * *" # daily: catches portal changes made outside Terraform, and stale data
   workflow_dispatch:
 
 permissions:
@@ -38,10 +40,8 @@ jobs:
         with:
           terraform_version: "~1.16"
           terraform_wrapper: false
-      - uses: actions/setup-python@v6 # TRANSITION: only for base commits from before the package; remove next PR
-        with:
-          python-version: "3.12"
       - uses: astral-sh/setup-uv@v10.3.1
+      - run: uv sync --locked --extra onelake
       - name: terraform init
         run: |
           terraform -chdir=infra/terraform/governance init
@@ -49,16 +49,38 @@ jobs:
       # if: !cancelled() runs every check, so one failure does not hide another
       - name: workspace domains
         if: ${{ !cancelled() }}
-        run: if [ -f pyproject.toml ]; then uv run --locked workspace-domains; else python tools/workspace_domains.py; fi
+        run: uv run --locked workspace-domains
       - name: tenant settings
         if: ${{ !cancelled() }}
-        run: if [ -f pyproject.toml ]; then uv run --locked tenant-settings; else python tools/tenant_settings.py; fi
+        run: uv run --locked tenant-settings
       - name: domain contributors
         if: ${{ !cancelled() }}
-        run: if [ -f pyproject.toml ]; then uv run --locked domain-contributors; else python tools/domain_contributors.py; fi
+        run: uv run --locked domain-contributors
       - name: OneLake roles
         if: ${{ !cancelled() }}
-        run: if [ -f pyproject.toml ]; then uv run --locked onelake-roles; else python tools/onelake_roles.py; fi
+        run: uv run --locked onelake-roles
       - name: labels, tags, endorsement
         if: ${{ !cancelled() }}
-        run: if [ -f pyproject.toml ]; then uv run --locked data-product-governance; else python tools/data_product_governance.py; fi
+        run: uv run --locked data-product-governance
+      - name: data contracts (schema, row counts, lineage)
+        if: ${{ !cancelled() && hashFiles('contracts/*.yml') != '' }} # deployed policy may predate contracts
+        run: uv run --locked data-contracts
+
+  freshness:
+    name: data freshness
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - uses: astral-sh/setup-uv@v10.3.1
+      - run: uv sync --locked --extra onelake
+      - run: terraform -chdir=infra/terraform/domains init
+      - name: latency SLA per data product
+        if: ${{ hashFiles('contracts/*.yml') != '' }}
+        run: uv run --locked data-freshness

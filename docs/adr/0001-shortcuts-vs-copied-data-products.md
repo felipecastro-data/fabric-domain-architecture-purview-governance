@@ -39,8 +39,8 @@ mesh lakehouses grant `*` to cross-domain readers; a Terraform validation blocks
   (see [design.md](../design.md#2-cost)).
 - A reader needs a role at every hop. Owners of a domain are Admins of their own workspace only, so they are denied
   upstream tables unless a role grants them, which is intended (see the access chart in the README).
-- The product schema is the source schema: a breaking change in the medallion repo reaches consumers directly unless
-  something pins the schema.
+- The product schema is the source schema. Data contracts pin it (ADR 0006), so a breaking change in the medallion
+  repo fails the compliance check instead of reaching consumers silently.
 - **Revisit when:** a producer needs a different shape than the source (then add a transform that writes to a separate
   lakehouse, keeping the shortcut-only rule for the product lakehouse), or a shortcut chain approaches the OneLake limit
   of 10 shortcuts per path.

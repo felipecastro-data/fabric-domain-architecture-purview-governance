@@ -4,18 +4,18 @@
 UV ?= uv
 TF ?= terraform
 STACKS := governance domains
-TOOLS := workspace-domains tenant-settings domain-contributors onelake-roles data-product-governance
+TOOLS := workspace-domains tenant-settings domain-contributors onelake-roles data-product-governance data-contracts
 # Import the package from the tree, not through the editable install's .pth file: macOS can flag that file hidden
 # (iCloud-synced folders), and Python skips hidden .pth files.
 export PYTHONPATH := $(CURDIR)/src
 
-.PHONY: help setup lint fmt test tf-check dry-run check plan apply charts
+.PHONY: help setup lint fmt test tf-check dry-run freshness check plan apply charts
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  make %-9s %s\n", $$1, $$2}'
 
 setup: ## Install Python 3.12 and the locked dependencies
-	$(UV) sync --locked --group dev
+	$(UV) sync --locked --group dev --extra onelake
 
 lint: setup ## Ruff lint and format check
 	$(UV) run ruff check .
@@ -42,6 +42,10 @@ tf-check: ## terraform fmt, validate and tflint for both stacks (no backend)
 dry-run: setup ## Every tool as a dry run against the live tenant (exits 1 on drift)
 	@for s in $(STACKS); do $(TF) -chdir=infra/terraform/$$s init -input=false >/dev/null || exit 1; done
 	@for t in $(TOOLS); do echo "== $$t"; $(UV) run $$t || exit 1; done
+
+freshness: setup ## Each data contract's latency SLA (newest Delta write per product)
+	@$(TF) -chdir=infra/terraform/domains init -input=false >/dev/null
+	$(UV) run data-freshness
 
 check: test tf-check dry-run ## Everything: lint, tests, Terraform static checks, live dry runs
 

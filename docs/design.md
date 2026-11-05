@@ -33,7 +33,9 @@ Adding a domain is data, not code:
 2. `domains`: one entry in `var.data_products` (lakehouse, tags, endorsement, shortcuts) and, if it reads upstream
    tables, its groups in `var.access_roles`. The `data_product_workspace` module creates the workspace, roles,
    lakehouse and domain assignment.
-3. Merge: CI applies both stacks and the tools; the compliance check covers the new domain from its next run.
+3. A data contract: `uv run --extra onelake data-contracts --scaffold <domain> > contracts/<domain>.yml`, then add
+   descriptions, keys, classification and owners.
+4. Merge: CI applies both stacks and the tools; the compliance check covers the new domain from its next run.
 
 Every check loops over Terraform outputs, so no tool changes.
 
@@ -50,7 +52,10 @@ Every check loops over Terraform outputs, so no tool changes.
 
 ### Read path
 
-Every read goes through the chain to the original Delta files; nothing is cached or copied.
+Every read goes through the chain to the original Delta files; nothing is cached or copied. Reading all 6,006,901
+rows of `fact_trips` took a median 13.0 s directly from `lh_gold` and 13.0 s through two hops from `lh_analytics`
+(delta-rs on a laptop, 3 runs each after a warm-up); resolving the extra shortcuts added about 0.7 s to opening the
+table. Hops cost metadata lookups, not data transfer.
 
 ## 2. Cost
 
@@ -93,7 +98,9 @@ the choice.
 | Endorsement | `var.data_products.endorsement` | **Portal** (no write API) | scanner API, daily |
 | Tenant settings | `tenant_settings.py` `DESIRED` | `--apply` | dry run, daily |
 | Purview labels and label policy | `tools/purview/labels.ps1` | Security & Compliance PowerShell | not checked (no read API for the CI identity) |
-| Lineage | implicit: shortcuts | Fabric | lineage view (screenshots) |
+| Lineage | implicit: shortcuts; `sourceWorkspace` in each contract | Fabric | `data-contracts` follows every shortcut chain, daily |
+| Schema, row counts | `contracts/*.yml` (ODCS v3.1) | the medallion platform | `data-contracts`, daily (required) |
+| Freshness | contract `latency` SLA (8 days) | the medallion platform's weekly schedule | `data-freshness`, daily (alert, not required) |
 
 Drift handling is the same everywhere: the daily run fails, the fix is either a PR (change the code to match an intended
 change) or `--apply` (restore the code's state).
