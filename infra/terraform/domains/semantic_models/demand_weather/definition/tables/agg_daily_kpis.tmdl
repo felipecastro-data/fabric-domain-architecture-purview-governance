@@ -1,30 +1,31 @@
 /// Daily trips per member type (Mobility data product, through lh_analytics).
 table agg_daily_kpis
 
+	/// Trips started.
 	measure Trips = SUM ( agg_daily_kpis[trips] )
 		formatString: #,0
-		description: Trips started.
 
+	/// Days with at least one trip.
 	measure Days = DISTINCTCOUNT ( agg_daily_kpis[date_key] )
 		formatString: #,0
-		description: Days with at least one trip.
 
+	/// Average daily demand.
 	measure 'Trips per day' = DIVIDE ( [Trips], [Days] )
 		formatString: #,0
-		description: Average daily demand.
 
+	/// Average daily demand on days without meaningful precipitation.
 	measure 'Trips per dry day' = CALCULATE ( [Trips per day], dim_weather[is_wet_day] = FALSE () )
 		formatString: #,0
-		description: Average daily demand on days without meaningful precipitation.
 
+	/// Average daily demand on wet days.
 	measure 'Trips per wet day' = CALCULATE ( [Trips per day], dim_weather[is_wet_day] = TRUE () )
 		formatString: #,0
-		description: Average daily demand on wet days.
 
+	/// How much lower (or higher) daily demand is on wet days than on dry days.
 	measure 'Wet-day demand change' = DIVIDE ( [Trips per wet day], [Trips per dry day] ) - 1
 		formatString: 0.0%;-0.0%;0.0%
-		description: How much lower (or higher) daily demand is on wet days than on dry days.
 
+	/// Expected trips per day for the same temperature band and wet/dry condition.
 	measure 'Weather baseline trips per day' = ```
 			-- Expected demand for the weather in context: trips per day over every day with the same
 			-- temperature band and wet/dry flag, across the whole calendar.
@@ -36,19 +37,18 @@ table agg_daily_kpis
 			)
 			```
 		formatString: #,0
-		description: Expected trips per day for the same temperature band and wet/dry condition.
 
+	/// Actual over weather-expected daily demand. Above 1 means busier than the weather alone explains.
 	measure 'Weather-adjusted demand index' = DIVIDE ( [Trips per day], [Weather baseline trips per day] )
 		formatString: 0.00
-		description: Actual over weather-expected daily demand. Above 1 means busier than the weather alone explains.
 
+	/// Trip-weighted average duration.
 	measure 'Avg duration (min)' = DIVIDE ( SUM ( agg_daily_kpis[total_duration_min] ), [Trips] )
 		formatString: 0.0
-		description: Trip-weighted average duration.
 
+	/// Share of trips by annual members.
 	measure 'Member share' = DIVIDE ( CALCULATE ( [Trips], agg_daily_kpis[member_type] = "member" ), [Trips] )
 		formatString: 0.0%;-0.0%;0.0%
-		description: Share of trips by annual members.
 
 	column date_key
 		dataType: int64
