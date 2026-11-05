@@ -77,8 +77,12 @@ jobs:
           terraform_wrapper: false
       - name: terraform init
         run: |
-          terraform init
-          if [ -n "$DOMAINS_WORKSPACE" ]; then terraform workspace select "$DOMAINS_WORKSPACE"; fi
+          if [ -n "$DOMAINS_WORKSPACE" ]; then
+            TF_WORKSPACE="$DOMAINS_WORKSPACE" terraform init # tagged workspaces: init must know which one
+            terraform workspace select "$DOMAINS_WORKSPACE"  # and plan reads the persisted choice
+          else
+            terraform init
+          fi
       - name: terraform plan
         id: plan
         run: |
