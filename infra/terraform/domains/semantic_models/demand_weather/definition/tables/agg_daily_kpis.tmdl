@@ -2,7 +2,7 @@
 table agg_daily_kpis
 
 	/// Trips started.
-	measure Trips = SUM ( agg_daily_kpis[trips] )
+	measure Trips = SUM ( agg_daily_kpis[trip_count] )
 		formatString: #,0
 
 	/// Days with at least one trip.
@@ -61,7 +61,7 @@ table agg_daily_kpis
 		summarizeBy: none
 		sourceColumn: member_type
 
-	column trips
+	column trip_count
 		dataType: int64
 		isHidden
 		summarizeBy: none
