@@ -49,6 +49,7 @@ jobs:
         run: |
           terraform -chdir=infra/terraform/governance init
           TF_WORKSPACE=fabric-mesh-domains terraform -chdir=infra/terraform/domains init
+          terraform -chdir=infra/terraform/domains workspace select fabric-mesh-domains # persists the choice
       # if: !cancelled() runs every check, so one failure does not hide another
       - name: workspace domains
         if: ${{ !cancelled() }}
@@ -88,7 +89,9 @@ jobs:
       # The deployed policy may predate environments: then there is no dev state to check
       - name: terraform init
         if: ${{ hashFiles('infra/terraform/domains/environment.tf') != '' }}
-        run: TF_WORKSPACE=fabric-mesh-domains-dev terraform -chdir=infra/terraform/domains init
+        run: |
+          TF_WORKSPACE=fabric-mesh-domains-dev terraform -chdir=infra/terraform/domains init
+          terraform -chdir=infra/terraform/domains workspace select fabric-mesh-domains-dev
       - name: workspace domains
         if: ${{ !cancelled() && hashFiles('infra/terraform/domains/environment.tf') != '' }}
         run: uv run --locked workspace-domains
@@ -118,7 +121,10 @@ jobs:
           terraform_wrapper: false
       - uses: astral-sh/setup-uv@v10.3.1
       - run: uv sync --locked --extra onelake
-      - run: TF_WORKSPACE=fabric-mesh-domains terraform -chdir=infra/terraform/domains init
+      - name: terraform init
+        run: |
+          TF_WORKSPACE=fabric-mesh-domains terraform -chdir=infra/terraform/domains init
+          terraform -chdir=infra/terraform/domains workspace select fabric-mesh-domains
       - name: latency SLA per data product
         if: ${{ hashFiles('contracts/*.yml') != '' }}
         run: uv run --locked data-freshness

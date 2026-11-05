@@ -63,7 +63,8 @@ jobs:
           - { name: domains · dev, stack: domains, environment: dev, tf_workspace: fabric-mesh-domains-dev }
           - { name: domains · prod, stack: domains, environment: prod, tf_workspace: fabric-mesh-domains }
     env:
-      TF_WORKSPACE: ${{ matrix.tf_workspace }}
+      # Not TF_WORKSPACE directly: an empty TF_WORKSPACE still conflicts with governance's named workspace
+      DOMAINS_WORKSPACE: ${{ matrix.tf_workspace }}
       TF_VAR_environment: ${{ matrix.environment }}
     defaults:
       run:
@@ -74,7 +75,10 @@ jobs:
         with:
           terraform_version: "~1.16"
           terraform_wrapper: false
-      - run: terraform init
+      - name: terraform init
+        run: |
+          terraform init
+          if [ -n "$DOMAINS_WORKSPACE" ]; then terraform workspace select "$DOMAINS_WORKSPACE"; fi
       - name: terraform plan
         id: plan
         run: |
