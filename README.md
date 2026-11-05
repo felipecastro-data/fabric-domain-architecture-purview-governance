@@ -85,7 +85,7 @@ never touch tenant-scope resources.
   medallion lakehouses, and the consumer domain points at the producers, so every read hits the original Delta files.
 - **A consumer product that serves**: Analytics builds `sm_demand_weather`, a Direct Lake semantic model over its
   shortcuts: relationships and measures (trips per wet and dry day, a weather-adjusted demand index) with no import
-  and no copy. CI frames it after every apply and checks it answers a DAX query.
+  and no copy. CI frames it after every apply and checks the framing daily; run as a user, the same tool checks every measure with a DAX query.
 - **Least-privilege access across hops**: OneLake security roles restrict tables at the source, and passthrough
   shortcuts make access the intersection of every hop. Consumers get dimensions and aggregates; ride-level data is for
   engineers only. A Terraform validation blocks roles on shortcut paths, which Fabric rejects.
@@ -206,7 +206,7 @@ flowchart LR
 |---|---|---|
 | Groups, domains, domain roles, default labels, tags | Terraform `governance` | `azuread_group`, `fabric_domain`, `fabric_domain_role_assignments`, `fabric_tag` |
 | Workspaces, lakehouses, workspace roles, domain assignment, shortcuts, item tags | Terraform `domains` | `fabric_workspace`, `fabric_lakehouse`, `fabric_domain_workspace_assignments`, `fabric_shortcut` |
-| Analytics semantic model (TMDL) | Terraform `domains` → [`semantic_model.py`](src/fabric_mesh_tools/semantic_model.py) | `fabric_semantic_model`; framing and a DAX check through the Power BI REST API |
+| Analytics semantic model (TMDL) | Terraform `domains` → [`semantic_model.py`](src/fabric_mesh_tools/semantic_model.py) | `fabric_semantic_model`; framing (CI) and a DAX check (users: `executeQueries` rejects service principals on Direct Lake on OneLake) through the Power BI REST API |
 | OneLake security roles | Terraform role map → [`onelake_roles.py`](src/fabric_mesh_tools/onelake_roles.py) | Single-role upsert. The provider resource fails on Entra members ([#1044](https://github.com/microsoft/terraform-provider-fabric/issues/1044)). |
 | Sensitivity labels on existing items | Terraform → [`data_product_governance.py`](src/fabric_mesh_tools/data_product_governance.py) | `bulkSetLabels` (user-only API, so CI only checks labels) |
 | Domain contributor scope | [`domain_contributors.py`](src/fabric_mesh_tools/domain_contributors.py) | Admin API (`contributorsScope` is preview-only) |
@@ -250,7 +250,7 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 | **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then 5 tools, all reporting a match. |
 | **Fast feedback** | A no-change apply takes **9 s** (governance) and **14 s** (domains), plus **15 s** for the 5 tools. The daily compliance run takes **30–50 s**. |
 | **Hops are free** | Reading all 6,006,901 rows of `fact_trips` took **13.0 s through 2 shortcut hops and 13.0 s from `lh_gold` directly** (median of 3). Zero-copy costs nothing at read time. |
-| **A product that answers** | `sm_demand_weather` frames in **18 s** and answers its DAX check in **1.8 s**, reading Delta through 2 shortcut hops with no import. In dev (62 days, 1.6M trips), wet days averaged **23,208 trips** against **28,025** on dry days: **17.2 % lower demand**. Members took **61 %** of trips. |
+| **A product that answers** | `sm_demand_weather` frames in **18 s** and answers its DAX check (run as a user) in **1.8 s**, reading Delta through 2 shortcut hops with no import. In dev (62 days, 1.6M trips), wet days averaged **23,208 trips** against **28,025** on dry days: **17.2 % lower demand**. Members took **61 %** of trips. |
 | **Contracts enforced** | 3 ODCS contracts cover 12 tables. Every table is checked daily for schema, row count and a lineage chain that ends in `divvy-medallion-prod`. |
 | **57 resources, one source of truth** | Groups, domains, workspaces, shortcuts, roles, the semantic model and governance metadata are declared once; tools read them from `terraform output`. |
 

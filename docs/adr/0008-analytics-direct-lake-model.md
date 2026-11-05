@@ -31,8 +31,11 @@ Measures: trips, trips per day, trips per dry and wet day, wet-day demand change
 the same temperature band and wet/dry flag across the calendar) and a **weather-adjusted demand index** (actual over
 weather-expected demand), average duration and member share.
 
-`semantic-model --refresh` frames the model after each apply, then runs a DAX query through the Power BI
-`executeQueries` API and fails if any measure is blank. Compliance runs the query daily.
+`semantic-model --refresh` frames the model after each apply. Run as a user, it then queries every measure through
+the Power BI `executeQueries` API and fails if any is blank. That API rejects service principals on SSO models, and
+Direct Lake on OneLake always queries as the caller, so in CI (the service principal) the check is the framing
+status instead: `Completed` proves the model binds to the current Delta schemas through the shortcut chain.
+Compliance checks the latest framing daily.
 
 ## Measured (dev, 2026-11-05)
 
@@ -47,7 +50,8 @@ weather-expected demand), average duration and member share.
 
 Deploying it surfaced two TMDL rules the provider doesn't check at plan time: descriptions are `///` comments, not a
 `description:` property, and a measure can't share a name with any column (case-insensitive), so the hidden `trips`
-column is `trip_count`.
+column is `trip_count`. The first CI run found the `executeQueries` limit above (401 `PowerBINotAuthorizedException`
+for the service principal, after framing it in 6 s).
 
 ## Consequences
 
