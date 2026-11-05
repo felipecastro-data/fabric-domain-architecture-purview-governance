@@ -37,16 +37,16 @@ Direct Lake on OneLake always queries as the caller, so in CI (the service princ
 status instead: `Completed` proves the model binds to the current Delta schemas through the shortcut chain.
 Compliance checks the latest framing daily.
 
-## Measured (dev, 2026-11-05)
+## Measured (2026-11-05)
 
-| | |
-|---|---|
-| Framing | 18 s |
-| DAX check (all measures) | 1.8 s |
-| Trips · days | 1,597,858 · 62 |
-| Trips per dry day · wet day | 28,025 · 23,208 |
-| Wet-day demand change | −17.2 % |
-| Member share | 61.2 % |
+| | prod | dev |
+|---|---|---|
+| Framing (CI, service principal) | 11 s | 11 s (18 s first run as a user) |
+| DAX check, all measures (user) | 3.5 s (24.5 s on a slower run) | 1.6–1.8 s |
+| Trips · days | 6,006,901 · 366 | 1,597,858 · 62 |
+| Trips per dry day · wet day | 17,060 · 15,355 | 28,025 · 23,208 |
+| Wet-day demand change | −10.0 % | −17.2 % |
+| Member share | 64.9 % | 61.2 % |
 
 Deploying it surfaced two TMDL rules the provider doesn't check at plan time: descriptions are `///` comments, not a
 `description:` property, and a measure can't share a name with any column (case-insensitive), so the hidden `trips`

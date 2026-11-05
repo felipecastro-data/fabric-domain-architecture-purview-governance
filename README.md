@@ -250,7 +250,7 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 | **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then 5 tools, all reporting a match. |
 | **Fast feedback** | A no-change apply takes **9 s** (governance) and **14 s** (domains), plus **15 s** for the 5 tools. The daily compliance run takes **30–50 s**. |
 | **Hops are free** | Reading all 6,006,901 rows of `fact_trips` took **13.0 s through 2 shortcut hops and 13.0 s from `lh_gold` directly** (median of 3). Zero-copy costs nothing at read time. |
-| **A product that answers** | `sm_demand_weather` frames in **18 s** and answers its DAX check (run as a user) in **1.8 s**, reading Delta through 2 shortcut hops with no import. In dev (62 days, 1.6M trips), wet days averaged **23,208 trips** against **28,025** on dry days: **17.2 % lower demand**. Members took **61 %** of trips. |
+| **A product that answers** | `sm_demand_weather` reads Delta through 2 shortcut hops with no import. CI frames it in **11 s** after every apply; run as a user, the DAX check over all 6.0M prod trips took **3.5 s** (24.5 s on a slower run; 1.6–1.8 s in dev). In prod (366 days), wet days averaged **15,355 trips** against **17,060** on dry days: **10.0 % lower demand** (dev, 62 days: 17.2 %). Members took **65 %** of trips. |
 | **Contracts enforced** | 3 ODCS contracts cover 12 tables. Every table is checked daily for schema, row count and a lineage chain that ends in `divvy-medallion-prod`. |
 | **57 resources, one source of truth** | Groups, domains, workspaces, shortcuts, roles, the semantic model and governance metadata are declared once; tools read them from `terraform output`. |
 
