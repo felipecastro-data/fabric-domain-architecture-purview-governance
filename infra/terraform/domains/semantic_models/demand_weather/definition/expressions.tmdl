@@ -1,0 +1,5 @@
+expression 'DirectLake - lh_analytics' =
+		let
+		    Source = AzureStorage.DataLake("https://onelake.dfs.fabric.microsoft.com/{{ .WorkspaceId }}/{{ .LakehouseId }}", [HierarchicalNavigation=true])
+		in
+		    Source

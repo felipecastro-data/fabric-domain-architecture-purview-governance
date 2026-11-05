@@ -1,0 +1,96 @@
+/// Daily trips per member type (Mobility data product, through lh_analytics).
+table agg_daily_kpis
+
+	/// Trips started.
+	measure Trips = SUM ( agg_daily_kpis[trip_count] )
+		formatString: #,0
+
+	/// Days with at least one trip.
+	measure Days = DISTINCTCOUNT ( agg_daily_kpis[date_key] )
+		formatString: #,0
+
+	/// Average daily demand.
+	measure 'Trips per day' = DIVIDE ( [Trips], [Days] )
+		formatString: #,0
+
+	/// Average daily demand on days without meaningful precipitation.
+	measure 'Trips per dry day' = CALCULATE ( [Trips per day], dim_weather[is_wet_day] = FALSE () )
+		formatString: #,0
+
+	/// Average daily demand on wet days.
+	measure 'Trips per wet day' = CALCULATE ( [Trips per day], dim_weather[is_wet_day] = TRUE () )
+		formatString: #,0
+
+	/// How much lower (or higher) daily demand is on wet days than on dry days.
+	measure 'Wet-day demand change' = DIVIDE ( [Trips per wet day], [Trips per dry day] ) - 1
+		formatString: 0.0%;-0.0%;0.0%
+
+	/// Expected trips per day for the same temperature band and wet/dry condition.
+	measure 'Weather baseline trips per day' = ```
+			-- Expected demand for the weather in context: trips per day over every day with the same
+			-- temperature band and wet/dry flag, across the whole calendar.
+			CALCULATE (
+			    [Trips per day],
+			    REMOVEFILTERS ( dim_date ),
+			    VALUES ( dim_weather[temperature_band] ),
+			    VALUES ( dim_weather[is_wet_day] )
+			)
+			```
+		formatString: #,0
+
+	/// Actual over weather-expected daily demand. Above 1 means busier than the weather alone explains.
+	measure 'Weather-adjusted demand index' = DIVIDE ( [Trips per day], [Weather baseline trips per day] )
+		formatString: 0.00
+
+	/// Trip-weighted average duration.
+	measure 'Avg duration (min)' = DIVIDE ( SUM ( agg_daily_kpis[total_duration_min] ), [Trips] )
+		formatString: 0.0
+
+	/// Share of trips by annual members.
+	measure 'Member share' = DIVIDE ( CALCULATE ( [Trips], agg_daily_kpis[member_type] = "member" ), [Trips] )
+		formatString: 0.0%;-0.0%;0.0%
+
+	column date_key
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: date_key
+
+	column member_type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: member_type
+
+	column trip_count
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: trips
+
+	column total_duration_min
+		dataType: double
+		isHidden
+		summarizeBy: none
+		sourceColumn: total_duration_min
+
+	column avg_distance_km
+		dataType: double
+		summarizeBy: none
+		sourceColumn: avg_distance_km
+
+	column electric_share
+		dataType: double
+		summarizeBy: none
+		sourceColumn: electric_share
+
+	column trip_month
+		dataType: string
+		summarizeBy: none
+		sourceColumn: trip_month
+
+	partition agg_daily_kpis = entity
+		mode: directLake
+		source
+			entityName: agg_daily_kpis
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_analytics'

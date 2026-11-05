@@ -1,0 +1,7 @@
+relationship agg_daily_kpis_dim_date
+	fromColumn: agg_daily_kpis.date_key
+	toColumn: dim_date.date_key
+
+relationship agg_daily_kpis_dim_weather
+	fromColumn: agg_daily_kpis.date_key
+	toColumn: dim_weather.date_key

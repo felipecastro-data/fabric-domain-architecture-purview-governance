@@ -17,10 +17,10 @@ data. This repository adds the mesh and the governance on top, without moving a 
 | At a glance | |
 |---|---|
 | Domains | **3 Fabric domains**: Mobility and Weather (producers), Analytics (consumer). Each has an owners, engineers and consumers Entra group. |
-| Data products | **12 OneLake shortcuts**, **0 copies**. `fact_trips` (**6.0M rows**) is read through 2 shortcut hops from the prod medallion lakehouse. |
+| Data products | **12 OneLake shortcuts**, **0 copies**. `fact_trips` (**6.0M rows**) is read through 2 shortcut hops from the prod medallion lakehouse. Analytics serves its own product: a **Direct Lake semantic model** of demand against weather. |
 | Access | **6 OneLake security roles**. Consumers read dimensions and aggregates only; ride-level data is for engineers. Verified live as a consumer test user. |
 | Governance | Sensitivity labels, tags, endorsement and domain contributor scope for every data product, all declared in Terraform. An **ODCS v3.1 data contract** per product (schema, owners, freshness SLA, classification). |
-| As code | **56 Terraform resources** in 2 stacks, plus **5 idempotent Python tools** for what the provider can't manage. |
+| As code | **57 Terraform resources** in 2 stacks, plus **5 idempotent Python tools** for what the provider can't manage. |
 | Delivery | **dev → prod**: every change is applied to `mesh-*-dev` (on `divvy-medallion-dev`) and checked before an approval releases it to prod. GitHub OIDC (no secrets), a plan comment per stack and environment on every PR, and a required **compliance** check that also runs daily. |
 
 ## Architecture
@@ -39,12 +39,14 @@ flowchart LR
     end
     subgraph DA["Domain: Analytics · consumer"]
         A[("lh_analytics<br/>Confidential · Promoted")]
+        SM[["sm_demand_weather<br/>Direct Lake semantic model"]]
     end
     G -- "5 shortcuts" --> M
     G -- "dim_weather" --> W
     S -- "weather_daily" --> W
     M -- "4 cross-domain shortcuts" --> A
     W -- "dim_weather" --> A
+    A -- "Direct Lake (no import)" --> SM
     PV{{"Microsoft Purview<br/>labels · endorsement · tags · lineage"}} -. governs .-> DM & DW & DA
 ```
 
@@ -81,6 +83,9 @@ never touch tenant-scope resources.
   (owners, engineers, consumers), mapped to domain roles and workspace roles in Terraform.
 - **Zero-copy data products**: data product lakehouses hold only OneLake shortcuts. Producers point at the prod
   medallion lakehouses, and the consumer domain points at the producers, so every read hits the original Delta files.
+- **A consumer product that serves**: Analytics builds `sm_demand_weather`, a Direct Lake semantic model over its
+  shortcuts: relationships and measures (trips per wet and dry day, a weather-adjusted demand index) with no import
+  and no copy. CI frames it after every apply and checks it answers a DAX query.
 - **Least-privilege access across hops**: OneLake security roles restrict tables at the source, and passthrough
   shortcuts make access the intersection of every hop. Consumers get dimensions and aggregates; ride-level data is for
   engineers only. A Terraform validation blocks roles on shortcut paths, which Fabric rejects.
@@ -201,6 +206,7 @@ flowchart LR
 |---|---|---|
 | Groups, domains, domain roles, default labels, tags | Terraform `governance` | `azuread_group`, `fabric_domain`, `fabric_domain_role_assignments`, `fabric_tag` |
 | Workspaces, lakehouses, workspace roles, domain assignment, shortcuts, item tags | Terraform `domains` | `fabric_workspace`, `fabric_lakehouse`, `fabric_domain_workspace_assignments`, `fabric_shortcut` |
+| Analytics semantic model (TMDL) | Terraform `domains` → [`semantic_model.py`](src/fabric_mesh_tools/semantic_model.py) | `fabric_semantic_model`; framing and a DAX check through the Power BI REST API |
 | OneLake security roles | Terraform role map → [`onelake_roles.py`](src/fabric_mesh_tools/onelake_roles.py) | Single-role upsert. The provider resource fails on Entra members ([#1044](https://github.com/microsoft/terraform-provider-fabric/issues/1044)). |
 | Sensitivity labels on existing items | Terraform → [`data_product_governance.py`](src/fabric_mesh_tools/data_product_governance.py) | `bulkSetLabels` (user-only API, so CI only checks labels) |
 | Domain contributor scope | [`domain_contributors.py`](src/fabric_mesh_tools/domain_contributors.py) | Admin API (`contributorsScope` is preview-only) |
@@ -240,12 +246,13 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 | **0 bytes copied** | 12 shortcuts serve **485 MB** of Delta data and **6.0M ride rows** in place. Every data product is as fresh as prod. |
 | **Least privilege, proven live** | A license-free test consumer read 3 tables through 2 shortcut hops and was denied `fact_trips`. |
 | **Drift caught daily** | 5 checks compare the live tenant with Terraform after every apply and at 06:00 UTC: workspace domains, tenant settings, contributor scope, OneLake roles, labels, tags and endorsement. |
-| **Promotion without risk** | Adding environments planned **0 changes in prod**. Dev runs the same 31 resources against `divvy-medallion-dev` (1.6M trips) and must pass its contracts before prod can be approved. |
+| **Promotion without risk** | Adding environments planned **0 changes in prod**. Dev runs the same 32 resources against `divvy-medallion-dev` (1.6M trips) and must pass its contracts before prod can be approved. |
 | **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then 5 tools, all reporting a match. |
 | **Fast feedback** | A no-change apply takes **9 s** (governance) and **14 s** (domains), plus **15 s** for the 5 tools. The daily compliance run takes **30–50 s**. |
 | **Hops are free** | Reading all 6,006,901 rows of `fact_trips` took **13.0 s through 2 shortcut hops and 13.0 s from `lh_gold` directly** (median of 3). Zero-copy costs nothing at read time. |
+| **A product that answers** | `sm_demand_weather` frames in **18 s** and answers its DAX check in **1.8 s**, reading Delta through 2 shortcut hops with no import. In dev (62 days, 1.6M trips), wet days averaged **23,208 trips** against **28,025** on dry days: **17.2 % lower demand**. Members took **61 %** of trips. |
 | **Contracts enforced** | 3 ODCS contracts cover 12 tables. Every table is checked daily for schema, row count and a lineage chain that ends in `divvy-medallion-prod`. |
-| **56 resources, one source of truth** | Groups, domains, workspaces, shortcuts, roles and governance metadata are declared once; tools read them from `terraform output`. |
+| **57 resources, one source of truth** | Groups, domains, workspaces, shortcuts, roles, the semantic model and governance metadata are declared once; tools read them from `terraform output`. |
 
 ![Effective table access per group: engineers read everything in their domain; consumers read dimensions and aggregates; owners hold no upstream role](docs/charts/access-matrix.png)
 
@@ -362,6 +369,7 @@ Progress is in [docs/PLAN.md](docs/PLAN.md). Working conventions are in [CLAUDE.
   - [0005](docs/adr/0005-plan-file-in-git-history.md) a removed plan file stays in git history (accepted)
   - [0006](docs/adr/0006-data-contracts-odcs.md) data contracts in ODCS v3.1, checked against the live tables
   - [0007](docs/adr/0007-dev-prod-environments.md) dev → prod environments for the domains stack
+  - [0008](docs/adr/0008-analytics-direct-lake-model.md) the Analytics data product is a Direct Lake semantic model
 
 ## 🏅 Author & Certifications
 

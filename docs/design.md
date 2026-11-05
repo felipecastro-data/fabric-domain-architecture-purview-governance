@@ -19,7 +19,7 @@ documentation at that date; check the linked pages before relying on them.
 | Longest shortcut chain | 2 hops (`lh_analytics` → `lh_mobility` → `lh_gold`) | 10 shortcuts per OneLake path; 5 direct shortcuts to shortcut links |
 | OneLake roles | 6 (2 on mesh lakehouses, 4 on source lakehouses) | 250 roles per item (1,000 on request) |
 | Members of the largest role | 4 groups (`lh_gold.MeshWeather`) | 500 users or groups per role |
-| Terraform resources | 56 in prod (2 stacks) + 31 in dev | — |
+| Terraform resources | 57 in prod (2 stacks) + 32 in dev | — |
 | Environments | dev, prod (domains stack); governance shared | — |
 
 Limits: [OneLake shortcuts](https://learn.microsoft.com/fabric/onelake/onelake-shortcuts),
