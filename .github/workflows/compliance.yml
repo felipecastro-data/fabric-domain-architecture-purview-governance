@@ -69,6 +69,9 @@ jobs:
       - name: data contracts (schema, row counts, lineage)
         if: ${{ !cancelled() && hashFiles('contracts/*.yml') != '' }} # deployed policy may predate contracts
         run: uv run --locked data-contracts
+      - name: Analytics semantic model answers a DAX query
+        if: ${{ !cancelled() && hashFiles('infra/terraform/domains/semantic_model.tf') != '' }}
+        run: uv run --locked semantic-model
 
   compliance-dev:
     name: compliance · dev
@@ -104,6 +107,9 @@ jobs:
       - name: data contracts (schema, row counts, lineage to divvy-medallion-dev)
         if: ${{ !cancelled() && hashFiles('infra/terraform/domains/environment.tf') != '' }}
         run: uv run --locked data-contracts
+      - name: Analytics semantic model answers a DAX query
+        if: ${{ !cancelled() && hashFiles('infra/terraform/domains/semantic_model.tf') != '' }}
+        run: uv run --locked semantic-model
 
   freshness:
     name: data freshness

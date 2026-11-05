@@ -1,0 +1,50 @@
+/// Daily Chicago weather (Weather data product).
+table dim_weather
+
+	column date_key
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: date_key
+
+	column condition
+		dataType: string
+		summarizeBy: none
+		sourceColumn: condition
+
+	column temperature_2m_mean
+		dataType: double
+		summarizeBy: none
+		sourceColumn: temperature_2m_mean
+
+	column temperature_band
+		dataType: string
+		summarizeBy: none
+		sourceColumn: temperature_band
+
+	column precipitation_sum
+		dataType: double
+		summarizeBy: none
+		sourceColumn: precipitation_sum
+
+	column snowfall_sum
+		dataType: double
+		summarizeBy: none
+		sourceColumn: snowfall_sum
+
+	column wind_speed_10m_max
+		dataType: double
+		summarizeBy: none
+		sourceColumn: wind_speed_10m_max
+
+	column is_wet_day
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: is_wet_day
+
+	partition dim_weather = entity
+		mode: directLake
+		source
+			entityName: dim_weather
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_analytics'

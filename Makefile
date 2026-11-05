@@ -11,7 +11,7 @@ DOMAINS_WORKSPACE := $(if $(filter prod,$(ENV)),fabric-mesh-domains,fabric-mesh-
 DOMAINS_TF := TF_WORKSPACE=$(DOMAINS_WORKSPACE) TF_VAR_environment=$(ENV) $(TF) -chdir=infra/terraform/domains
 export MESH_ENV := $(ENV)
 TENANT_TOOLS := tenant-settings domain-contributors
-TOOLS := workspace-domains tenant-settings domain-contributors onelake-roles data-product-governance data-contracts
+TOOLS := workspace-domains tenant-settings domain-contributors onelake-roles data-product-governance data-contracts semantic-model
 # Import the package from the tree, not through the editable install's .pth file: macOS can flag that file hidden
 # (iCloud-synced folders), and Python skips hidden .pth files.
 export PYTHONPATH := $(CURDIR)/src
@@ -72,6 +72,7 @@ apply: setup ## Apply governance, then domains in ENV, then the tools (same orde
 	$(UV) run onelake-roles --apply
 	$(UV) run data-product-governance --apply
 	$(UV) run workspace-domains
+	$(UV) run semantic-model --refresh
 
 charts: setup ## Re-render the README charts from Terraform outputs and OneLake
 	$(UV) run --extra onelake --extra charts mesh-charts --out docs/charts

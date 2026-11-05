@@ -17,7 +17,7 @@ data. This repository adds the mesh and the governance on top, without moving a 
 | At a glance | |
 |---|---|
 | Domains | **3 Fabric domains**: Mobility and Weather (producers), Analytics (consumer). Each has an owners, engineers and consumers Entra group. |
-| Data products | **12 OneLake shortcuts**, **0 copies**. `fact_trips` (**6.0M rows**) is read through 2 shortcut hops from the prod medallion lakehouse. |
+| Data products | **12 OneLake shortcuts**, **0 copies**. `fact_trips` (**6.0M rows**) is read through 2 shortcut hops from the prod medallion lakehouse. Analytics serves its own product: a **Direct Lake semantic model** of demand against weather. |
 | Access | **6 OneLake security roles**. Consumers read dimensions and aggregates only; ride-level data is for engineers. Verified live as a consumer test user. |
 | Governance | Sensitivity labels, tags, endorsement and domain contributor scope for every data product, all declared in Terraform. An **ODCS v3.1 data contract** per product (schema, owners, freshness SLA, classification). |
 | As code | **56 Terraform resources** in 2 stacks, plus **5 idempotent Python tools** for what the provider can't manage. |
@@ -39,12 +39,14 @@ flowchart LR
     end
     subgraph DA["Domain: Analytics · consumer"]
         A[("lh_analytics<br/>Confidential · Promoted")]
+        SM[["sm_demand_weather<br/>Direct Lake semantic model"]]
     end
     G -- "5 shortcuts" --> M
     G -- "dim_weather" --> W
     S -- "weather_daily" --> W
     M -- "4 cross-domain shortcuts" --> A
     W -- "dim_weather" --> A
+    A -- "Direct Lake (no import)" --> SM
     PV{{"Microsoft Purview<br/>labels · endorsement · tags · lineage"}} -. governs .-> DM & DW & DA
 ```
 
@@ -81,6 +83,9 @@ never touch tenant-scope resources.
   (owners, engineers, consumers), mapped to domain roles and workspace roles in Terraform.
 - **Zero-copy data products**: data product lakehouses hold only OneLake shortcuts. Producers point at the prod
   medallion lakehouses, and the consumer domain points at the producers, so every read hits the original Delta files.
+- **A consumer product that serves**: Analytics builds `sm_demand_weather`, a Direct Lake semantic model over its
+  shortcuts: relationships and measures (trips per wet and dry day, a weather-adjusted demand index) with no import
+  and no copy. CI frames it after every apply and checks it answers a DAX query.
 - **Least-privilege access across hops**: OneLake security roles restrict tables at the source, and passthrough
   shortcuts make access the intersection of every hop. Consumers get dimensions and aggregates; ride-level data is for
   engineers only. A Terraform validation blocks roles on shortcut paths, which Fabric rejects.
@@ -201,6 +206,7 @@ flowchart LR
 |---|---|---|
 | Groups, domains, domain roles, default labels, tags | Terraform `governance` | `azuread_group`, `fabric_domain`, `fabric_domain_role_assignments`, `fabric_tag` |
 | Workspaces, lakehouses, workspace roles, domain assignment, shortcuts, item tags | Terraform `domains` | `fabric_workspace`, `fabric_lakehouse`, `fabric_domain_workspace_assignments`, `fabric_shortcut` |
+| Analytics semantic model (TMDL) | Terraform `domains` → [`semantic_model.py`](src/fabric_mesh_tools/semantic_model.py) | `fabric_semantic_model`; framing and a DAX check through the Power BI REST API |
 | OneLake security roles | Terraform role map → [`onelake_roles.py`](src/fabric_mesh_tools/onelake_roles.py) | Single-role upsert. The provider resource fails on Entra members ([#1044](https://github.com/microsoft/terraform-provider-fabric/issues/1044)). |
 | Sensitivity labels on existing items | Terraform → [`data_product_governance.py`](src/fabric_mesh_tools/data_product_governance.py) | `bulkSetLabels` (user-only API, so CI only checks labels) |
 | Domain contributor scope | [`domain_contributors.py`](src/fabric_mesh_tools/domain_contributors.py) | Admin API (`contributorsScope` is preview-only) |
@@ -362,6 +368,7 @@ Progress is in [docs/PLAN.md](docs/PLAN.md). Working conventions are in [CLAUDE.
   - [0005](docs/adr/0005-plan-file-in-git-history.md) a removed plan file stays in git history (accepted)
   - [0006](docs/adr/0006-data-contracts-odcs.md) data contracts in ODCS v3.1, checked against the live tables
   - [0007](docs/adr/0007-dev-prod-environments.md) dev → prod environments for the domains stack
+  - [0008](docs/adr/0008-analytics-direct-lake-model.md) the Analytics data product is a Direct Lake semantic model
 
 ## 🏅 Author & Certifications
 

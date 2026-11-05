@@ -20,6 +20,7 @@ read-onelake = "fabric_mesh_tools.read_onelake:main"
 mesh-charts = "fabric_mesh_tools.mesh_charts:main"
 data-contracts = "fabric_mesh_tools.data_contracts:main"
 data-freshness = "fabric_mesh_tools.data_contracts:main_freshness"
+semantic-model = "fabric_mesh_tools.semantic_model:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]

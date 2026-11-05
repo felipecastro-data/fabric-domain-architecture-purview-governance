@@ -1,0 +1,70 @@
+/// Calendar (Mobility data product).
+table dim_date
+
+	column date_key
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: date_key
+
+	column date
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		summarizeBy: none
+		sourceColumn: date
+
+	column year
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: year
+
+	column quarter
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: quarter
+
+	column month
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: month
+
+	column month_name
+		dataType: string
+		summarizeBy: none
+		sourceColumn: month_name
+
+	column period
+		dataType: string
+		summarizeBy: none
+		sourceColumn: period
+
+	column day_of_week
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: day_of_week
+
+	column day_name
+		dataType: string
+		summarizeBy: none
+		sourceColumn: day_name
+
+	column is_weekend
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: is_weekend
+
+	column is_holiday
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: is_holiday
+
+	column holiday_name
+		dataType: string
+		summarizeBy: none
+		sourceColumn: holiday_name
+
+	partition dim_date = entity
+		mode: directLake
+		source
+			entityName: dim_date
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_analytics'
