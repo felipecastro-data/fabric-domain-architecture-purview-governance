@@ -19,7 +19,8 @@ documentation at that date; check the linked pages before relying on them.
 | Longest shortcut chain | 2 hops (`lh_analytics` → `lh_mobility` → `lh_gold`) | 10 shortcuts per OneLake path; 5 direct shortcuts to shortcut links |
 | OneLake roles | 6 (2 on mesh lakehouses, 4 on source lakehouses) | 250 roles per item (1,000 on request) |
 | Members of the largest role | 4 groups (`lh_gold.MeshWeather`) | 500 users or groups per role |
-| Terraform resources | 56 in 2 stacks | — |
+| Terraform resources | 56 in prod (2 stacks) + 31 in dev | — |
+| Environments | dev, prod (domains stack); governance shared | — |
 
 Limits: [OneLake shortcuts](https://learn.microsoft.com/fabric/onelake/onelake-shortcuts),
 [OneLake security](https://learn.microsoft.com/fabric/onelake/security/data-access-control-model).
@@ -35,7 +36,8 @@ Adding a domain is data, not code:
    lakehouse and domain assignment.
 3. A data contract: `uv run --extra onelake data-contracts --scaffold <domain> > contracts/<domain>.yml`, then add
    descriptions, keys, classification and owners.
-4. Merge: CI applies both stacks and the tools; the compliance check covers the new domain from its next run.
+4. Merge: CI applies governance, then the domain in dev (checked against its contract), then prod after approval; the
+   compliance checks cover it from their next run.
 
 Every check loops over Terraform outputs, so no tool changes.
 
@@ -63,7 +65,7 @@ table. Hops cost metadata lookups, not data transfer.
 
 | Item | SKU | Cost |
 |---|---|---|
-| Fabric capacity | Trial `FTL64` (West US), shared with the medallion platform | 0 until the trial ends (2026-12-12) |
+| Fabric capacity | Trial `FTL64` (West US), shared with the medallion platform and both environments | 0 until the trial ends (2026-12-12) |
 | Purview Information Protection | Microsoft 365 E5 Information Protection & Governance trial, 25 seats | 0 until 2026-12-03 |
 | HCP Terraform | Free tier, local execution | 0 |
 | GitHub Actions | Public repository | 0 |
@@ -74,7 +76,7 @@ List prices (pay-as-you-go, US regions, 2026); reservations cut capacity cost by
 
 | Item | Choice | Why | Order of magnitude |
 |---|---|---|---|
-| Capacity | **F2** for the mesh, or share the medallion platform's capacity | The mesh runs no Spark and no pipelines. Its compute is OneLake read transactions, the SQL endpoint and scanner calls. | F2 ≈ $263 / month always on; pausing it outside business hours halves that |
+| Capacity | **F2** for the mesh (dev and prod can share it, or dev can pause), or share the medallion platform's capacity | The mesh runs no Spark and no pipelines. Its compute is OneLake read transactions, the SQL endpoint and scanner calls. | F2 ≈ $263 / month always on; pausing it outside business hours halves that |
 | Storage | OneLake | Shortcuts store nothing; storage is billed once, to the capacity that holds the source data | 485 MB ≈ cents per month, paid by the medallion platform |
 | Shortcut reads | Consumer capacity | Read transactions through a shortcut are billed to the capacity of the workspace that holds the shortcut, not the source ([OneLake consumption](https://learn.microsoft.com/fabric/onelake/onelake-consumption)) | Small at this volume; moves cost from producer to consumer, which is the mesh's intent |
 | Report viewers | Power BI Pro per viewer below F64 | On F2–F32 every viewer of a report needs a Pro license; from F64 Viewers are free | The break-even is roughly where Pro licenses cost more than the step to F64 |
@@ -133,7 +135,7 @@ the `platform` environment.
 | Threat | Entry point | Impact | Mitigation | Residual risk |
 |---|---|---|---|---|
 | Malicious code in a PR runs during `plan` or `compliance` | PR from a branch of this repo | Acts as the CI identity before approval | Only write-access users can open such PRs; fork PRs get no credentials and are skipped (ADR 0004) | Accepted for one maintainer; a read-only plan identity is the fix |
-| Unreviewed apply | Push to `main` | Tenant changes | `main` protected (PRs only, required checks, resolved threads); `apply` waits for a reviewer on `platform` | A maintainer can approve their own change |
+| Unreviewed apply | Push to `main` | Tenant changes | `main` protected (PRs only, required checks, resolved threads); governance and prod applies wait for a reviewer on `platform`; dev applies without approval, but only to `mesh-*-dev` | A maintainer can approve their own change |
 | Stolen OIDC token | Compromised runner | Short-lived token for this repo's subjects only | Federated credentials bound to repo + ref/environment; tokens live minutes | Window of minutes |
 | Graph over-reach | `Group.ReadWrite.All` | Could modify any group in the tenant | Terraform manages only the 9 mesh groups; the CI identity owns them | Tenant-wide permission remains; use a dedicated tenant or administrative units in production |
 | HCP token leak | Repository secret | Read/write of mesh state | Secret only in jobs that need it; state holds IDs, no credentials | Rotate on suspicion |

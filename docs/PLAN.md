@@ -59,5 +59,5 @@ The options and trade-offs behind these are in [docs/adr/](adr/); costs and limi
   - [x] ADRs 0001–0006 and `docs/design.md` (scalability, cost, governance, security)
   - [x] Python package `src/fabric_mesh_tools`, ruff + pytest in CI (required), Makefile, tfvars examples
   - [x] ODCS v3.1 data contracts + `data-contracts` (required) and `data-freshness` (alert) checks; timings in README
-  - [ ] dev → prod environments for the domains stack
+  - [x] dev → prod environments for the domains stack (ADR 0007)
   - [ ] Analytics derived data product (Direct Lake semantic model)

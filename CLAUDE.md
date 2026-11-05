@@ -24,6 +24,8 @@ PowerShell (labels): portable install at `~/.local/bin/pwsh` with ExchangeOnline
 
 - Two Terraform stacks, applied in order: `infra/terraform/governance` (tenant scope) → `infra/terraform/domains`
   (reads governance outputs from HCP remote state). Never put tenant-scope resources in `domains`.
+- `domains` has two environments (dev, prod), one HCP workspace each: always go through `make plan|apply ENV=…`, or set
+  `TF_WORKSPACE` + `TF_VAR_environment` (tools: `MESH_ENV`). Prod keeps the original names (`mesh-<domain>`).
 - Data product lakehouses hold **only shortcuts**; source data stays in `divvy-medallion-prod`.
 - Anything the provider cannot manage goes into an idempotent tool in `src/fabric_mesh_tools/` (entry point in
   `pyproject.toml`, unit test in `tests/`), never a manual portal step

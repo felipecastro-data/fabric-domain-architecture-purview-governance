@@ -25,9 +25,9 @@ locals {
   ]))
 }
 
-# Upstream medallion platform (github.com/felipecastro-data/fabric-medallion-cicd-terraform)
+# Upstream medallion platform (github.com/felipecastro-data/fabric-medallion-cicd-terraform), same environment
 data "fabric_workspace" "source" {
-  display_name = var.source_workspace_name
+  display_name = local.source_workspace_name
 }
 
 # The CI service principal manages the OneLake roles on the source lakehouses (src/fabric_mesh_tools/onelake_roles.py),
@@ -53,8 +53,8 @@ module "data_product" {
   source   = "./modules/data_product_workspace"
   for_each = var.data_products
 
-  display_name          = "${var.project_name}-${each.key}"
-  description           = "${local.domains[each.key].display_name} domain workspace (${local.domains[each.key].kind}) — managed by Terraform"
+  display_name          = "${var.project_name}-${each.key}${local.name_suffix}"
+  description           = "${local.domains[each.key].display_name} domain workspace (${local.domains[each.key].kind}${local.is_prod ? "" : ", ${var.environment}"}) — managed by Terraform"
   capacity_id           = var.capacity_id
   lakehouse_name        = each.value.lakehouse
   lakehouse_description = each.value.description

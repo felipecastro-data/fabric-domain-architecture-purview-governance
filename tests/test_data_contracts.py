@@ -91,3 +91,10 @@ def test_stale():
     now = datetime(2026, 11, 13, tzinfo=UTC)
     assert dc.stale(datetime(2026, 11, 4, tzinfo=UTC), timedelta(days=8), now)
     assert not dc.stale(datetime(2026, 11, 6, tzinfo=UTC), timedelta(days=8), now)
+
+
+def test_expected_source_per_environment():
+    assert dc.expected_source("divvy-medallion-prod", "prod", "divvy-medallion-prod") == "divvy-medallion-prod"
+    assert dc.expected_source("divvy-medallion-prod", "dev", "divvy-medallion-dev") == "divvy-medallion-dev"
+    with pytest.raises(SystemExit, match="differs"):
+        dc.expected_source("divvy-medallion-prod", "prod", "other-prod")

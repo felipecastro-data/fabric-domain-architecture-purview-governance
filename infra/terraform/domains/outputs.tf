@@ -29,7 +29,7 @@ output "data_product_governance" {
       label        = coalesce(p.label, local.domains[k].default_label)
       label_id     = local.labels[coalesce(p.label, local.domains[k].default_label)]
       tags         = { for t in p.tags : t => data.terraform_remote_state.governance.outputs.tags[t] }
-      endorsement  = p.endorsement
+      endorsement  = local.is_prod ? p.endorsement : null # endorsement is a prod promise; dev items stay unendorsed
     }
   }
 }

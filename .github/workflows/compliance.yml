@@ -4,6 +4,7 @@ name: compliance
 # workspace domains, tenant settings, domain contributors, OneLake roles, labels / tags / endorsement, and each data
 # product's schema, row counts and lineage. `data freshness` checks the contracts' latency SLA in its own job, which is
 # not a required check: a stale upstream is an alert for the medallion platform, not something a mesh PR can fix.
+# `compliance` checks prod (the required check); `compliance · dev` checks the dev environment's domain-scope state.
 # PRs check live state against the *deployed* policy (base-branch code), so a PR that changes the policy is not
 # blocked by drift it will only fix once applied; the proposed policy is checked after terraform.yml applies it.
 on:
@@ -32,6 +33,8 @@ jobs:
     # Fork PRs get neither the HCP token nor an OIDC token; the job is skipped, which satisfies the required check.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    env:
+      MESH_ENV: prod
     steps:
       - uses: actions/checkout@v7
         with:
@@ -45,7 +48,8 @@ jobs:
       - name: terraform init
         run: |
           terraform -chdir=infra/terraform/governance init
-          terraform -chdir=infra/terraform/domains init
+          TF_WORKSPACE=fabric-mesh-domains terraform -chdir=infra/terraform/domains init
+          terraform -chdir=infra/terraform/domains workspace select fabric-mesh-domains # persists the choice
       # if: !cancelled() runs every check, so one failure does not hide another
       - name: workspace domains
         if: ${{ !cancelled() }}
@@ -66,10 +70,12 @@ jobs:
         if: ${{ !cancelled() && hashFiles('contracts/*.yml') != '' }} # deployed policy may predate contracts
         run: uv run --locked data-contracts
 
-  freshness:
-    name: data freshness
+  compliance-dev:
+    name: compliance · dev
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    env:
+      MESH_ENV: dev
     steps:
       - uses: actions/checkout@v7
         with:
@@ -80,7 +86,45 @@ jobs:
           terraform_wrapper: false
       - uses: astral-sh/setup-uv@v10.3.1
       - run: uv sync --locked --extra onelake
-      - run: terraform -chdir=infra/terraform/domains init
+      # The deployed policy may predate environments: then there is no dev state to check
+      - name: terraform init
+        if: ${{ hashFiles('infra/terraform/domains/environment.tf') != '' }}
+        run: |
+          TF_WORKSPACE=fabric-mesh-domains-dev terraform -chdir=infra/terraform/domains init
+          terraform -chdir=infra/terraform/domains workspace select fabric-mesh-domains-dev
+      - name: workspace domains
+        if: ${{ !cancelled() && hashFiles('infra/terraform/domains/environment.tf') != '' }}
+        run: uv run --locked workspace-domains
+      - name: OneLake roles
+        if: ${{ !cancelled() && hashFiles('infra/terraform/domains/environment.tf') != '' }}
+        run: uv run --locked onelake-roles
+      - name: labels, tags
+        if: ${{ !cancelled() && hashFiles('infra/terraform/domains/environment.tf') != '' }}
+        run: uv run --locked data-product-governance
+      - name: data contracts (schema, row counts, lineage to divvy-medallion-dev)
+        if: ${{ !cancelled() && hashFiles('infra/terraform/domains/environment.tf') != '' }}
+        run: uv run --locked data-contracts
+
+  freshness:
+    name: data freshness
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      MESH_ENV: prod # the SLA is a prod promise; dev data is refreshed on demand
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - uses: astral-sh/setup-uv@v10.3.1
+      - run: uv sync --locked --extra onelake
+      - name: terraform init
+        run: |
+          TF_WORKSPACE=fabric-mesh-domains terraform -chdir=infra/terraform/domains init
+          terraform -chdir=infra/terraform/domains workspace select fabric-mesh-domains
       - name: latency SLA per data product
         if: ${{ hashFiles('contracts/*.yml') != '' }}
         run: uv run --locked data-freshness
