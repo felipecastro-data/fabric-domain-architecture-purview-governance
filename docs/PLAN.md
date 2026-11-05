@@ -55,7 +55,7 @@ The options and trade-offs behind these are in [docs/adr/](adr/); costs and limi
         (workspace domains, tenant settings, contributors, OneLake roles, labels / tags / endorsement)
   - [x] `main` protected: PRs only, `ci` + `compliance` required
 - [x] **8. Showcase**: README with diagrams, governance matrix, screenshots, impact
-- [ ] **9. Review follow-ups** (2026-11-05)
+- [x] **9. Review follow-ups** (2026-11-05; all applied to dev and prod)
   - [x] ADRs 0001–0006 and `docs/design.md` (scalability, cost, governance, security)
   - [x] Python package `src/fabric_mesh_tools`, ruff + pytest in CI (required), Makefile, tfvars examples
   - [x] ODCS v3.1 data contracts + `data-contracts` (required) and `data-freshness` (alert) checks; timings in README
