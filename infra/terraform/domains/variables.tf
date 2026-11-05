@@ -20,7 +20,7 @@ variable "data_products" {
     One data product lakehouse per domain (key = domain key from the governance stack).
     Each shortcut maps a table name to its source: `from` is "source:<lakehouse>" for the upstream medallion workspace,
     or another domain key for a cross-domain shortcut. `label` (default: the domain's default label), `tags` and
-    `endorsement` (Promoted | Certified) are applied to the lakehouse by tools/data_product_governance.py.
+    `endorsement` (Promoted | Certified) are applied to the lakehouse by src/fabric_mesh_tools/data_product_governance.py.
   EOT
   type = map(object({
     lakehouse   = string

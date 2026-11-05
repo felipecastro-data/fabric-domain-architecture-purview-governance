@@ -1,5 +1,8 @@
 """Fabric API access tokens for the repo's tools.
 
+Vendored from felipecastro-data/fabric-medallion-cicd-terraform, tools/fabric_auth.py at commit cbbcf4a (unchanged).
+Change it there first, then copy it here, so the two repositories keep one implementation.
+
 * **GitHub Actions** (``ACTIONS_ID_TOKEN_REQUEST_URL`` set): request a *fresh* GitHub OIDC token and exchange it with
   Entra ID (client-credentials flow with a federated client assertion) for every renewal. Re-running
   ``az account get-access-token`` is not enough in CI: ``azure/login`` signs the CLI in with a single, short-lived

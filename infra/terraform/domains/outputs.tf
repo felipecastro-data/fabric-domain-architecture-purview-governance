@@ -1,5 +1,5 @@
 output "workspaces" {
-  description = "Domain key => { workspace_id, lakehouse_id, domain_id }. tools/workspace_domains.py checks the domain assignments."
+  description = "Domain key => { workspace_id, lakehouse_id, domain_id }. src/fabric_mesh_tools/workspace_domains.py checks the domain assignments."
   value = {
     for k, m in module.data_product : k => {
       workspace_id = m.workspace_id
@@ -20,7 +20,7 @@ output "shortcuts" {
 }
 
 output "data_product_governance" {
-  description = "Domain key => lakehouse with its sensitivity label, tags (applied by Terraform) and endorsement — checked by tools/data_product_governance.py."
+  description = "Domain key => lakehouse with its sensitivity label, tags (applied by Terraform) and endorsement — checked by src/fabric_mesh_tools/data_product_governance.py."
   value = {
     for k, p in var.data_products : k => {
       workspace_id = module.data_product[k].workspace_id

@@ -1,0 +1,36 @@
+{
+  "ws-mobility/lh-mobility": [
+    {
+      "id": "r1",
+      "name": "CrossDomainRead",
+      "decisionRules": [{"effect": "Permit", "permission": [
+        {"attributeName": "Path", "attributeValueIncludedIn": ["*"]},
+        {"attributeName": "Action", "attributeValueIncludedIn": ["Read"]}
+      ]}],
+      "members": {"microsoftEntraMembers": [
+        {"objectId": "g-analytics-engineers", "tenantId": "t"},
+        {"objectId": "g-analytics-consumers", "tenantId": "t"}
+      ]}
+    },
+    {
+      "id": "r0",
+      "name": "DefaultReader",
+      "decisionRules": [{"effect": "Permit", "permission": [
+        {"attributeName": "Path", "attributeValueIncludedIn": ["*"]},
+        {"attributeName": "Action", "attributeValueIncludedIn": ["Read"]}
+      ]}],
+      "members": {"fabricItemMembers": [{"sourcePath": "ws-mobility/lh-mobility", "itemAccess": ["ReadAll"]}]}
+    }
+  ],
+  "ws-source/lh-gold": [
+    {
+      "id": "r2",
+      "name": "MeshAggregates",
+      "decisionRules": [{"effect": "Permit", "permission": [
+        {"attributeName": "Action", "attributeValueIncludedIn": ["Read"]},
+        {"attributeName": "Path", "attributeValueIncludedIn": ["/Tables/dbo/dim_station", "/Tables/dbo/fact_trips"]}
+      ]}],
+      "members": {"microsoftEntraMembers": [{"objectId": "g-mobility-consumers", "tenantId": "t"}]}
+    }
+  ]
+}

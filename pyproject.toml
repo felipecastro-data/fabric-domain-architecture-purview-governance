@@ -1,0 +1,42 @@
+[project]
+name = "fabric-mesh-tools"
+version = "0.1.0"
+description = "Idempotent tools for the Fabric data mesh settings the Terraform provider cannot manage, plus compliance checks"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = []  # the governance tools use the standard library only
+
+[project.optional-dependencies]
+onelake = ["deltalake>=1.1", "pyarrow>=20", "pandas>=2.2"]  # read_onelake, mesh_charts
+charts = ["matplotlib>=3.10"]                                # mesh_charts
+
+[project.scripts]
+tenant-settings = "fabric_mesh_tools.tenant_settings:main"
+domain-contributors = "fabric_mesh_tools.domain_contributors:main"
+onelake-roles = "fabric_mesh_tools.onelake_roles:main"
+data-product-governance = "fabric_mesh_tools.data_product_governance:main"
+workspace-domains = "fabric_mesh_tools.workspace_domains:main"
+read-onelake = "fabric_mesh_tools.read_onelake:main"
+mesh-charts = "fabric_mesh_tools.mesh_charts:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fabric_mesh_tools"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]

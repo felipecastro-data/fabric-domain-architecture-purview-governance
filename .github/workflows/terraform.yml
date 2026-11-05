@@ -6,13 +6,17 @@ on:
   pull_request:
     paths:
       - "infra/terraform/**"
-      - "tools/**"
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
       - ".github/workflows/terraform.yml"
   push:
     branches: [main]
     paths:
       - "infra/terraform/**"
-      - "tools/**"
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
       - ".github/workflows/terraform.yml"
   workflow_dispatch:
 
@@ -25,7 +29,7 @@ env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-  # Fabric and azuread providers, and tools/fabric_auth.py
+  # Fabric and azuread providers, and src/fabric_mesh_tools/fabric_auth.py
   FABRIC_USE_OIDC: "true"
   FABRIC_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
   FABRIC_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -112,9 +116,8 @@ jobs:
         with:
           terraform_version: "~1.16"
           terraform_wrapper: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v10.3.1
+      - run: uv sync --locked
       - name: apply · governance
         working-directory: infra/terraform/governance
         run: |
@@ -129,12 +132,12 @@ jobs:
           terraform apply -no-color -lock-timeout=5m tfplan
       # Settings the provider cannot manage. Labels and endorsement are checked only (no service principal API).
       - name: tools · tenant settings
-        run: python tools/tenant_settings.py --apply
+        run: uv run --locked tenant-settings --apply
       - name: tools · domain contributors
-        run: python tools/domain_contributors.py --apply
+        run: uv run --locked domain-contributors --apply
       - name: tools · OneLake roles
-        run: python tools/onelake_roles.py --apply
+        run: uv run --locked onelake-roles --apply
       - name: tools · labels, tags, endorsement
-        run: python tools/data_product_governance.py --apply
+        run: uv run --locked data-product-governance --apply
       - name: check · workspace domains
-        run: python tools/workspace_domains.py
+        run: uv run --locked workspace-domains
