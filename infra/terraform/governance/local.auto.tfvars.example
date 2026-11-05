@@ -1,0 +1,9 @@
+# Copy to local.auto.tfvars (gitignored) and fill in. CI sets the same inputs as TF_VAR_* from GitHub variables.
+
+# Entra object ID of the human administrator (az ad signed-in-user show --query id -o tsv)
+admin_user_object_id = ""
+
+# Entra object ID of the CI service principal (az ad sp show --id <AZURE_CLIENT_ID> --query id -o tsv)
+ci_service_principal_object_id = ""
+
+# sensitivity_label_ids is written by tools/purview/labels.ps1 to labels.auto.tfvars.json (also gitignored)

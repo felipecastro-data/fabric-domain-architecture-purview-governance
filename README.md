@@ -292,7 +292,7 @@ infra/terraform/governance/   tenant scope: Entra groups · domains · domain ro
 infra/terraform/domains/      workspaces · data product lakehouses · roles · shortcuts · OneLake role map · governance outputs
 tools/                        idempotent tools for what the provider can't manage (+ OneLake reader, README charts)
 tools/purview/                Purview sensitivity labels and label policy (PowerShell)
-docs/                         plan, charts, screenshots
+docs/                         design (scalability · cost · governance · security), ADRs, plan, charts, screenshots
 .github/workflows/            ci (fmt · validate · tflint) · terraform (plan / apply) · compliance (drift check)
 ```
 
@@ -310,7 +310,7 @@ Terraform organization, and the medallion platform from the
 3. Create the labels and label policy: `pwsh tools/purview/labels.ps1 -UserPrincipalName <admin upn>`. This applies
    them immediately and writes the label IDs to `labels.auto.tfvars.json`.
 4. Enable the tenant settings: `python tools/tenant_settings.py --apply`.
-5. Write each stack's `local.auto.tfvars` (it is gitignored):
+5. Copy each stack's `local.auto.tfvars.example` to `local.auto.tfvars` (gitignored) and fill it in:
    - `governance`: `admin_user_object_id` and `ci_service_principal_object_id`;
    - `domains`: `capacity_id`.
 6. Apply `infra/terraform/governance`, then `infra/terraform/domains`.
@@ -322,7 +322,18 @@ Terraform organization, and the medallion platform from the
    - create the `platform` environment and add **required reviewers** to it. Without that protection rule, applies
      run without waiting for approval.
 
-Progress and decisions are in [docs/PLAN.md](docs/PLAN.md). Working conventions are in [CLAUDE.md](CLAUDE.md).
+Progress is in [docs/PLAN.md](docs/PLAN.md). Working conventions are in [CLAUDE.md](CLAUDE.md).
+
+## Design and decisions
+
+- [docs/design.md](docs/design.md): scalability (onboarding domain N, shortcut depth, role limits), cost (replacing
+  the trials), governance controls and the CI identity's threat model.
+- Architecture decision records, each with the options considered and their trade-offs:
+  - [0001](docs/adr/0001-shortcuts-vs-copied-data-products.md) data products as shortcuts, not copies
+  - [0002](docs/adr/0002-two-terraform-stacks.md) two Terraform stacks: central governance and domain platform
+  - [0003](docs/adr/0003-onelake-roles-via-python-upsert.md) OneLake roles through a Python upsert until the provider is fixed
+  - [0004](docs/adr/0004-pr-plan-identity.md) PR plans run with the deployment identity (accepted risk)
+  - [0005](docs/adr/0005-plan-file-in-git-history.md) a removed plan file stays in git history (accepted)
 
 ## 🏅 Author & Certifications
 
