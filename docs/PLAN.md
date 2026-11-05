@@ -6,6 +6,8 @@ Upstream data comes from [fabric-medallion-cicd-terraform](https://github.com/fe
 
 ## Decisions
 
+The options and trade-offs behind these are in [docs/adr/](adr/); costs and limits in [design.md](design.md).
+
 | Topic | Decision |
 |---|---|
 | Domains | **Mobility**, **Weather** (producers) → **Analytics** (consumer) |
