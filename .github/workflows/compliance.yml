@@ -13,8 +13,9 @@ on:
     workflows: [terraform]
     types: [completed]
     branches: [main]
-  schedule:
-    - cron: "0 6 * * *" # daily: catches portal changes made outside Terraform, and stale data
+  # Paused 2026-11-13 (project complete; upstream pl_medallion schedule paused 2026-11-04, so data freshness would
+  # fail daily). Run on demand from the Actions tab. To resume, restore:
+  #   schedule: [{cron: "0 6 * * *"}]  # daily: catches portal changes made outside Terraform, and stale data
   workflow_dispatch:
 
 permissions:
