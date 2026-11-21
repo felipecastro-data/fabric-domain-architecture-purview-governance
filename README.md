@@ -209,7 +209,7 @@ flowchart LR
 | Analytics semantic model (TMDL) | Terraform `domains` → [`semantic_model.py`](src/fabric_mesh_tools/semantic_model.py) | `fabric_semantic_model`; framing (CI) and a DAX check (users: `executeQueries` rejects service principals on Direct Lake on OneLake) through the Power BI REST API |
 | OneLake security roles | Terraform role map → [`onelake_roles.py`](src/fabric_mesh_tools/onelake_roles.py) | Single-role upsert. The provider resource fails on Entra members ([#1044](https://github.com/microsoft/terraform-provider-fabric/issues/1044)). |
 | Sensitivity labels on existing items | Terraform → [`data_product_governance.py`](src/fabric_mesh_tools/data_product_governance.py) | `bulkSetLabels` (user-only API, so CI only checks labels) |
-| Domain contributor scope | [`domain_contributors.py`](src/fabric_mesh_tools/domain_contributors.py) | Admin API (`contributorsScope` is preview-only) |
+| Domain contributor scope | [`domain_contributors.py`](src/fabric_mesh_tools/domain_contributors.py) | Admin API role assignments (removes the tenant-wide contributor the provider leaves) |
 | Tenant settings (labels, endorsement, domains) | [`tenant_settings.py`](src/fabric_mesh_tools/tenant_settings.py) | Admin API |
 | Purview labels and label policy | [`purview/labels.ps1`](tools/purview/labels.ps1) | Security & Compliance PowerShell |
 | Data contracts: schema, row counts, lineage, freshness | [`contracts/*.yml`](contracts) → [`data_contracts.py`](src/fabric_mesh_tools/data_contracts.py) | Delta log over OneLake (delta-rs) + shortcuts API; validated against the ODCS JSON schema |
