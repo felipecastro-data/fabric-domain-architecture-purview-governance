@@ -30,7 +30,7 @@ The options and trade-offs behind these are in [docs/adr/](adr/); costs and limi
 - [x] **3. Governance stack**: HCP workspace `fabric-mesh-governance` (local execution, state shared with `fabric-mesh-domains`);
   applied 2026-11-03: 9 groups, 3 domains, domain admins/contributors, 4 tags
   - [x] Domain default labels applied 2026-11-03: Mobility/Analytics = Confidential, Weather = Public
-  - [x] Domain contributors restricted to the engineers group (`src/fabric_mesh_tools/domain_contributors.py`, preview Admin API; provider has no `contributors_scope`)
+  - [x] Domain contributors restricted to the engineers group (`src/fabric_mesh_tools/domain_contributors.py`: no EntireTenant contributor, via the stable role-assignments API; the preview `contributorsScope` API was retired)
 - [x] **4. Domains stack**: HCP workspace `fabric-mesh-domains`; applied 2026-11-03: 3 workspaces + lakehouses, group roles,
   domain assignment (provider preview), 12 shortcuts (7 to the medallion platform, 5 cross-domain).
   Verified: 6,006,901 trips readable in `lh_analytics` through two shortcut hops, zero copies; re-plan shows no drift
