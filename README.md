@@ -332,7 +332,7 @@ docs/                         design (scalability · cost · governance · secur
 ### Locally: checks in one command
 
 ```bash
-make ci   # uv sync --locked, ruff, 44 unit tests on fixtures, terraform fmt / validate / tflint for both stacks
+make ci   # uv sync --locked, ruff, unit tests on fixtures, terraform fmt / validate / tflint for both stacks
 ```
 
 No tenant and no login: this is the gate CI runs. Needs [uv](https://docs.astral.sh/uv/), Terraform and tflint. On
