@@ -8,7 +8,7 @@
 A **data-mesh architecture on Microsoft Fabric**, governed end to end and **defined as code**. Fabric **domains** own
 their workspaces. Producer domains publish **data products** through **OneLake shortcuts**, with zero copies. A
 consumer domain combines them across domains. **OneLake data access roles**, **Microsoft Purview sensitivity labels**,
-**endorsement**, **tags** and **lineage** decide who reads what and which data can be trusted. A daily **compliance check** proves the live tenant still matches the code.
+**endorsement**, **tags** and **lineage** decide who reads what and which data can be trusted. A **compliance check** after every apply proves the live tenant still matches the code.
 
 The data products expose real Chicago **Divvy** bike-share trips and **Open-Meteo** weather. The sibling project
 [fabric-medallion-cicd-terraform](https://github.com/felipecastro-data/fabric-medallion-cicd-terraform) produces that
@@ -21,8 +21,8 @@ data. This repository adds the mesh and the governance on top, without moving a 
 | Data products | **12 OneLake shortcuts**, **0 copies**. `fact_trips` (**6.0M rows**) is read through 2 shortcut hops from the prod medallion lakehouse. Analytics serves its own product: a **Direct Lake semantic model** of demand against weather. |
 | Access | **6 OneLake security roles**. Consumers read dimensions and aggregates only; ride-level data is for engineers. Verified live as a consumer test user. |
 | Governance | Sensitivity labels, tags, endorsement and domain contributor scope for every data product, all declared in Terraform. An **ODCS v3.1 data contract** per product (schema, owners, freshness SLA, classification). |
-| As code | **57 Terraform resources** in 2 stacks, plus **5 idempotent Python tools** for what the provider can't manage. |
-| Delivery | **dev → prod**: every change is applied to `mesh-*-dev` (on `divvy-medallion-dev`) and checked before an approval releases it to prod. GitHub OIDC (no secrets), a plan comment per stack and environment on every PR, and a required **compliance** check that also runs daily. |
+| As code | **57 Terraform resources** in 2 stacks, plus **7 idempotent Python tools**: 5 fill provider gaps, 2 check the data contracts and the semantic model. |
+| Delivery | **dev → prod**: every change is applied to `mesh-*-dev` (on `divvy-medallion-dev`) and checked before an approval releases it to prod. GitHub OIDC (no secrets), a plan comment per stack and environment on every PR, and a required **compliance** check that also runs after every apply. |
 
 ## Architecture
 
@@ -86,7 +86,7 @@ never touch tenant-scope resources.
   medallion lakehouses, and the consumer domain points at the producers, so every read hits the original Delta files.
 - **A consumer product that serves**: Analytics builds `sm_demand_weather`, a Direct Lake semantic model over its
   shortcuts: relationships and measures (trips per wet and dry day, a weather-adjusted demand index) with no import
-  and no copy. CI frames it after every apply and checks the framing daily; run as a user, the same tool checks every measure with a DAX query.
+  and no copy. CI frames it after every apply; run as a user, the same tool checks every measure with a DAX query.
 - **Least-privilege access across hops**: OneLake security roles restrict tables at the source, and passthrough
   shortcuts make access the intersection of every hop. Consumers get dimensions and aggregates; ride-level data is for
   engineers only. A Terraform validation blocks roles on shortcut paths, which Fabric rejects.
@@ -101,15 +101,14 @@ never touch tenant-scope resources.
 - **Idempotent tools for API gaps**: dry run by default, exit 1 on drift, `--apply` to fix. They cover OneLake roles,
   labels, contributor scope and tenant settings until the provider catches up.
 - **Data contracts**: one [ODCS v3.1](https://bitol-io.github.io/open-data-contract-standard/) contract per data
-  product in [`contracts/`](contracts). Every day CI reads each table through its product lakehouse and fails on a
+  product in [`contracts/`](contracts). After every apply CI reads each table through its product lakehouse and fails on a
   missing or retyped column, an empty table, or a shortcut chain that doesn't end in `divvy-medallion-prod`. A
   separate job alerts when a product is older than its 8-day freshness SLA.
 - **Environment promotion**: the domains stack runs as dev (`mesh-<domain>-dev`, reading `divvy-medallion-dev`) and
   prod, each with its own HCP state. CI applies dev and checks it (roles, labels, contracts) before prod is offered for
   approval. Tenant-scope governance is shared and gets its own approval.
 - **Delivery with gates**: GitHub OIDC (no cloud secrets), a plan comment per stack and environment on every PR, an
-  approval-gated prod apply, a protected `main` and a required compliance check that also runs after every apply and
-  daily.
+  approval-gated prod apply, a protected `main` and a required compliance check that also runs after every apply.
 
 ## Governance matrix
 
@@ -179,7 +178,7 @@ flowchart LR
     GP -->|no| Dev
     G --> Dev["apply · dev<br/>mesh-*-dev on divvy-medallion-dev<br/>roles · labels · contracts checked<br/>semantic model framed"]
     Dev -->|"approval: platform"| Prod["apply · prod<br/>mesh-* on divvy-medallion-prod<br/>tenant settings · contributors · roles · labels<br/>semantic model framed"]
-    Prod --> C["compliance (prod, required) · compliance · dev<br/>after every apply + daily 06:00 UTC"]
+    Prod --> C["compliance (prod, required) · compliance · dev<br/>after every apply · on demand"]
     Prod --> F["data freshness (alert)<br/>8-day latency SLA"]
 ```
 
@@ -194,6 +193,9 @@ flowchart LR
 - **Compliance** fails the build when any of these drifts from Terraform: a workspace's domain, a tenant setting, a
   domain's contributor scope, a OneLake role, a label, a tag set or an endorsement; or when a data product breaks its
   contract (schema, row counts, lineage). Freshness runs as a separate, non-required `data freshness` job.
+- **Daily schedule paused** (2026-11-13): the project is complete and the upstream `pl_medallion` schedule is off, so a
+  daily run would only report stale data. Compliance still runs on every PR and after every apply; run it from the
+  Actions tab, or restore the `schedule` line in `compliance.yml`.
 - **Accepted trade-off: PR plans use the deployment identity.** Providers and data sources can run code during
   `terraform plan`, so a pull request from someone with write access could act with the CI service principal before
   the `platform` approval. Fork PRs never get the credentials: their plan and compliance jobs are skipped. With a
@@ -234,6 +236,7 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 | Domain review | New domains let the **entire tenant** contribute workspaces | Contributor scope restricted to the engineers group; checked on every run |
 | CI bootstrap plan | A provider update started tracking lakehouse `tags` and planned to strip the tags the tool had applied | Tags moved into Terraform; the tool now only checks them |
 | Live consumer test | The Fabric REST API returns 401 `UserNotLicensed` for a license-free consumer, but OneLake reads work | Reader takes lakehouse GUIDs, so consumers are tested exactly as they read |
+| Live API change | Microsoft retired the preview domain Admin API (`contributorsScope`), so the contributors check failed, and the required check, which runs `main`'s tools, also blocked the PR that fixed it | Tool moved to the stable role-assignments API (an EntireTenant contributor is the tenant-wide scope); merged once with a temporary admin bypass |
 | Code review | A required compliance check would block policy-changing PRs and every fork PR | PRs check live state against the deployed policy (base-branch tools); fork PRs skip safely |
 | Code review | A workspace created by CI already makes it Admin, so a direct Admin assignment would fail with `PrincipalAlreadyHasWorkspaceRolePermissions` | CI is a member of every owners group and inherits Admin through it |
 | Code review | One workflow-wide concurrency group let a PR plan cancel a deployment waiting for approval | Plans queue per PR and stack; applies have their own group that never cancels |
@@ -246,13 +249,13 @@ Each of these was found by a plan, a failed apply, a live test or a review, befo
 |---|---|
 | **0 bytes copied** | 12 shortcuts serve **485 MB** of Delta data and **6.0M ride rows** in place. Every data product is as fresh as prod. |
 | **Least privilege, proven live** | A license-free test consumer read 3 tables through 2 shortcut hops and was denied `fact_trips`. |
-| **Drift caught daily** | 5 checks compare the live tenant with Terraform after every apply and at 06:00 UTC: workspace domains, tenant settings, contributor scope, OneLake roles, labels, tags and endorsement. |
+| **Drift caught on every apply** | 5 checks compare the live tenant with Terraform after every apply and on demand: workspace domains, tenant settings, contributor scope, OneLake roles, labels, tags and endorsement. |
 | **Promotion without risk** | Adding environments planned **0 changes in prod**. Dev runs the same 32 resources against `divvy-medallion-dev` (1.6M trips) and must pass its contracts before prod can be approved. |
-| **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then the 5 tools, all reporting a match. Dev also checks its data contracts, and both environments frame the semantic model. |
-| **Fast feedback** | A no-change apply takes **9 s** (governance) and **14 s** (domains), plus **15 s** for the 5 tools. The daily compliance run takes **30–50 s**. |
+| **Clean deploys as CI** | Applies run as the service principal: governance, then domains, then the 5 governance tools, all reporting a match. Dev also checks its data contracts, and both environments frame the semantic model. |
+| **Fast feedback** | A no-change apply takes **9 s** (governance) and **14 s** (domains), plus **15 s** for the 5 governance tools. A compliance run takes **30–50 s**. |
 | **Hops are free** | Reading all 6,006,901 rows of `fact_trips` took **13.0 s through 2 shortcut hops and 13.0 s from `lh_gold` directly** (median of 3). Zero-copy costs nothing at read time. |
 | **A product that answers** | `sm_demand_weather` reads Delta through 2 shortcut hops with no import. CI frames it in **11 s** after every apply; run as a user, the DAX check over all 6.0M prod trips took **3.5 s** (24.5 s on a slower run; 1.6–1.8 s in dev). In prod (366 days), wet days averaged **15,355 trips** against **17,060** on dry days: **10.0 % lower demand** (dev, 62 days: 17.2 %). Members took **65 %** of trips. |
-| **Contracts enforced** | 3 ODCS contracts cover 12 tables. Every table is checked daily for schema, row count and a lineage chain that ends in `divvy-medallion-prod`. |
+| **Contracts enforced** | 3 ODCS contracts cover 12 tables. Every table is checked on each compliance run for schema, row count and a lineage chain that ends in `divvy-medallion-prod`. |
 | **57 resources, one source of truth** | Groups, domains, workspaces, shortcuts, roles, the semantic model and governance metadata are declared once; tools read them from `terraform output`. |
 
 ![Effective table access per group: engineers read everything in their domain; consumers read dimensions and aggregates; owners hold no upstream role](docs/charts/access-matrix.png)
@@ -310,7 +313,7 @@ fails. The Mobility screenshot above shows the result.
 | Identity | Microsoft Entra ID groups, service principal with GitHub OIDC federated credentials |
 | Infrastructure as code | Terraform `microsoft/fabric` + `hashicorp/azuread`, HCP Terraform remote state, tflint |
 | Automation | Python 3.12 package on the Fabric REST and Admin APIs (standard library; delta-rs, PyYAML and jsonschema for the contracts), uv, ruff, pytest; PowerShell for Purview labels |
-| CI/CD | GitHub Actions, environments with required reviewers, protected `main`, scheduled compliance |
+| CI/CD | GitHub Actions, environments with required reviewers, protected `main`, compliance on every apply (daily schedule paused) |
 
 ## Repository layout
 
