@@ -92,19 +92,22 @@ the choice.
 
 | Control | Declared in | Enforced by | Checked |
 |---|---|---|---|
-| Domain ownership (workspace → domain) | `fabric_domain_workspace_assignments` | Terraform | `workspace_domains.py`, daily |
-| Domain contributors limited to the engineers group | `var.domains` → groups | `domain_contributors.py --apply` | dry run, daily |
+| Domain ownership (workspace → domain) | `fabric_domain_workspace_assignments` | Terraform | `workspace_domains.py`, each compliance run |
+| Domain contributors limited to the engineers group | `var.domains` → groups | `domain_contributors.py --apply` | dry run, each compliance run |
 | Default sensitivity label per domain | `var.domains.default_label` | Terraform (`fabric_domain`) | plan |
-| Label per data product | `var.data_products.label` (default: the domain's) | `data_product_governance.py --apply` (user identity: `bulkSetLabels` rejects service principals) | dry run, daily |
-| Tags | `var.data_products.tags` | Terraform (`fabric_lakehouse.tags`) | dry run, daily |
-| Endorsement | `var.data_products.endorsement` | **Portal** (no write API) | scanner API, daily |
-| Tenant settings | `tenant_settings.py` `DESIRED` | `--apply` | dry run, daily |
+| Label per data product | `var.data_products.label` (default: the domain's) | `data_product_governance.py --apply` (user identity: `bulkSetLabels` rejects service principals) | dry run, each compliance run |
+| Tags | `var.data_products.tags` | Terraform (`fabric_lakehouse.tags`) | dry run, each compliance run |
+| Endorsement | `var.data_products.endorsement` | **Portal** (no write API) | scanner API, each compliance run |
+| Tenant settings | `tenant_settings.py` `DESIRED` | `--apply` | dry run, each compliance run |
 | Purview labels and label policy | `tools/purview/labels.ps1` | Security & Compliance PowerShell | not checked (no read API for the CI identity) |
-| Lineage | implicit: shortcuts; `sourceWorkspace` in each contract | Fabric | `data-contracts` follows every shortcut chain, daily |
-| Schema, row counts | `contracts/*.yml` (ODCS v3.1) | the medallion platform | `data-contracts`, daily (required) |
-| Freshness | contract `latency` SLA (8 days) | the medallion platform's weekly schedule | `data-freshness`, daily (alert, not required) |
+| Lineage | implicit: shortcuts; `sourceWorkspace` in each contract | Fabric | `data-contracts` follows every shortcut chain, each compliance run |
+| Schema, row counts | `contracts/*.yml` (ODCS v3.1) | the medallion platform | `data-contracts`, each compliance run (required) |
+| Freshness | contract `latency` SLA (8 days) | the medallion platform's weekly schedule | `data-freshness`, each compliance run (alert, not required) |
 
-Drift handling is the same everywhere: the daily run fails, the fix is either a PR (change the code to match an intended
+A compliance run happens on every PR, after every apply and on demand. The daily schedule and the medallion
+platform's weekly schedule have been paused since November 2026 (project complete); `compliance.yml` says how to resume.
+
+Drift handling is the same everywhere: the compliance run fails, the fix is either a PR (change the code to match an intended
 change) or `--apply` (restore the code's state).
 
 ## 4. Security

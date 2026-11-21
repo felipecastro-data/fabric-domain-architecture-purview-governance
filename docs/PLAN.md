@@ -51,8 +51,9 @@ The options and trade-offs behind these are in [docs/adr/](adr/); costs and limi
   - [x] Service principal `sp-fabric-mesh-governance` (GitHub OIDC; member of `sg-fabric-automation`; Graph
         `Group.ReadWrite.All` + `Directory.Read.All`; workspace Admin / source Member through Terraform)
   - [x] `terraform.yml`: plan comment per stack on PRs; governance → domains → tools apply behind `platform`
-  - [x] `compliance.yml`: read-only drift check on PRs (deployed policy), after each apply and daily
-        (workspace domains, tenant settings, contributors, OneLake roles, labels / tags / endorsement)
+  - [x] `compliance.yml`: read-only drift check on PRs (deployed policy), after each apply and on demand
+        (daily schedule paused 2026-11-13, project complete;
+        workspace domains, tenant settings, contributors, OneLake roles, labels / tags / endorsement)
   - [x] `main` protected: PRs only, `ci` + `compliance` required
 - [x] **8. Showcase**: README with diagrams, governance matrix, screenshots, impact
 - [x] **9. Review follow-ups** (2026-11-05; all applied to dev and prod)
