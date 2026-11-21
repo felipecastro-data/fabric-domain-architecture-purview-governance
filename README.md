@@ -16,6 +16,7 @@ data. This repository adds the mesh and the governance on top, without moving a 
 
 | At a glance | |
 |---|---|
+| Pipeline | **One end-to-end system across two repos**. Ingestion and transform (bronze → silver → gold) run in the sibling [fabric-medallion-cicd-terraform](https://github.com/felipecastro-data/fabric-medallion-cicd-terraform). This repo adds storage as data products (shortcuts) and serving (a Direct Lake model), with no copy. |
 | Domains | **3 Fabric domains**: Mobility and Weather (producers), Analytics (consumer). Each has an owners, engineers and consumers Entra group. |
 | Data products | **12 OneLake shortcuts**, **0 copies**. `fact_trips` (**6.0M rows**) is read through 2 shortcut hops from the prod medallion lakehouse. Analytics serves its own product: a **Direct Lake semantic model** of demand against weather. |
 | Access | **6 OneLake security roles**. Consumers read dimensions and aggregates only; ride-level data is for engineers. Verified live as a consumer test user. |
@@ -319,13 +320,27 @@ infra/terraform/domains/      workspaces · data product lakehouses · roles · 
 src/fabric_mesh_tools/        Python package: idempotent tools for what the provider can't manage (+ OneLake reader, README charts)
 tests/                        pytest on fixture JSON (no network): role diffing, change detection, access through hops
 tools/purview/                Purview sensitivity labels and label policy (PowerShell)
-Makefile                      make check · plan · apply
+Makefile                      make ci · check · plan · apply
+.devcontainer/                Codespace / devcontainer: uv, Terraform, tflint, PowerShell, az, gh
 contracts/                    ODCS v3.1 data contracts, one per data product (+ the vendored ODCS JSON schema)
 docs/                         design (scalability · cost · governance · security), ADRs, plan, charts, screenshots
 .github/workflows/            ci (fmt · validate · tflint) · terraform (plan / apply) · compliance (drift check)
 ```
 
 ## Run it yourself
+
+### Locally: checks in one command
+
+```bash
+make ci   # uv sync --locked, ruff, unit tests on fixtures, terraform fmt / validate / tflint for both stacks
+```
+
+No tenant and no login: this is the gate CI runs. Needs [uv](https://docs.astral.sh/uv/), Terraform and tflint. On
+macOS: `brew install uv terraform tflint`. Or open the repo in a **Codespace / devcontainer**: uv, Terraform, tflint,
+PowerShell (with ExchangeOnlineManagement) and the Azure and GitHub CLIs are preinstalled, and `make setup` runs on
+create. `make check` adds every tool's dry run against a live tenant (needs `az login`).
+
+### On your tenant
 
 You need a Fabric capacity (a trial works), Microsoft Purview Information Protection (an E5 trial works), an HCP
 Terraform organization, and the medallion platform from the

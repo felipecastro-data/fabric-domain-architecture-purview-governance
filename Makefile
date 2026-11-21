@@ -1,4 +1,5 @@
-# One-command local workflow. `make check` runs what the `ci` gate runs plus every tool's dry run (live, read-only).
+# One-command local workflow. `make ci` is the offline gate CI runs (no tenant, no login); `make check` adds every
+# tool's dry run (live, read-only).
 # ENV=dev|prod (default prod) selects the domains environment: `make plan ENV=dev`, `make apply ENV=dev`.
 # Needs uv, terraform, tflint and az login (Fabric administrator); see README "Run it yourself".
 .DEFAULT_GOAL := help
@@ -16,7 +17,7 @@ TOOLS := workspace-domains tenant-settings domain-contributors onelake-roles dat
 # (iCloud-synced folders), and Python skips hidden .pth files.
 export PYTHONPATH := $(CURDIR)/src
 
-.PHONY: help setup lint fmt test tf-check dry-run freshness check plan apply charts
+.PHONY: help setup lint fmt test tf-check ci dry-run freshness check plan apply charts
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  make %-9s %s\n", $$1, $$2}'
@@ -45,6 +46,8 @@ tf-check: ## terraform fmt, validate and tflint for both stacks (no backend)
 	  if command -v tflint >/dev/null; then (cd infra/terraform/$$s && tflint --init >/dev/null && tflint --recursive --format compact) || exit 1; \
 	  else echo "tflint not installed: skipped (CI runs it)"; fi; \
 	done
+
+ci: test tf-check ## Offline gate, same as CI: lint, tests, Terraform static checks (no tenant)
 
 dry-run: setup ## Every tool as a dry run against the live tenant, in ENV (exits 1 on drift)
 	@$(TF) -chdir=infra/terraform/governance init -input=false >/dev/null
